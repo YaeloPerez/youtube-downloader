@@ -7,7 +7,7 @@ from pathlib import Path
 from queue import Empty, Queue
 
 import yt_dlp
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
 app = FastAPI()
@@ -198,12 +198,14 @@ async def download_video(
 
 
 @app.get("/file/{download_id}")
-async def serve_file(download_id: str, filename: str = Query("video")):
+async def serve_file(download_id: str, background_tasks: BackgroundTasks, filename: str = Query("video")):
     files = list(DOWNLOADS_DIR.glob(f"{download_id}.*"))
     if not files:
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    file_path = files[0]
+    background_tasks.add_task(file_path.unlink, missing_ok=True)
     return FileResponse(
-        path=files[0],
+        path=file_path,
         filename=filename,
         media_type="application/octet-stream",
     )
