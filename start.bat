@@ -4,13 +4,34 @@ cd /d "%~dp0"
 echo === YT Downloader - Setup ===
 echo.
 
-:: Instalar dependencias Python
-echo [1/2] Instalando dependencias Python...
+:: ── 1. Python ─────────────────────────────────────────────────────────────────
+echo [1/3] Verificando Python...
+where python >nul 2>&1
+if %errorlevel% neq 0 (
+    echo     Python no encontrado. Instalando con winget...
+    winget install --id Python.Python.3 -e --accept-package-agreements --accept-source-agreements
+    if %errorlevel% neq 0 (
+        echo.
+        echo     ERROR: No se pudo instalar Python automaticamente.
+        echo     Descargalo manualmente desde https://python.org
+        echo     y asegurate de marcar "Add Python to PATH".
+        pause
+        exit /b 1
+    )
+    echo     Python instalado correctamente.
+    :: Recargar PATH
+    for /f "tokens=*" %%i in ('powershell -Command "[System.Environment]::GetEnvironmentVariable(\"PATH\",\"User\")"') do set "PATH=%%i;%PATH%"
+) else (
+    echo     Python ya instalado.
+)
+
+:: ── 2. Dependencias Python ────────────────────────────────────────────────────
+echo [2/3] Instalando dependencias Python...
 pip install -r requirements.txt -q
 echo     Listo.
 
-:: Verificar ffmpeg
-echo [2/2] Verificando ffmpeg...
+:: ── 3. ffmpeg ─────────────────────────────────────────────────────────────────
+echo [3/3] Verificando ffmpeg...
 where ffmpeg >nul 2>&1
 if %errorlevel% neq 0 (
     echo     ffmpeg no encontrado. Instalando con winget...
@@ -23,7 +44,6 @@ if %errorlevel% neq 0 (
         echo.
     ) else (
         echo     ffmpeg instalado correctamente.
-        :: Recargar PATH para que uvicorn lo encuentre
         for /f "tokens=*" %%i in ('powershell -Command "[System.Environment]::GetEnvironmentVariable(\"PATH\",\"User\")"') do set "PATH=%%i;%PATH%"
     )
 ) else (
