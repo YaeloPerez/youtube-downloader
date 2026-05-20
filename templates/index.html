@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YT Downloader</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface2: #242424;
+      --border: #333;
+      --red: #ff4444;
+      --red-dark: #cc2222;
+      --text: #e8e8e8;
+      --muted: #888;
+      --radius: 10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 80px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+    header h1 span { color: var(--red); }
+    header p { color: var(--muted); margin-top: 6px; font-size: .9rem; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    /* ── URL input ── */
+    .url-row {
+      display: flex;
+      gap: 10px;
+    }
+    .url-row input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: .95rem;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .url-row input:focus { border-color: var(--red); }
+    .url-row input::placeholder { color: var(--muted); }
+
+    button {
+      background: var(--red);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: .9rem;
+      font-weight: 600;
+      padding: 10px 20px;
+      transition: background .15s, transform .1s;
+      white-space: nowrap;
+    }
+    button:hover { background: var(--red-dark); }
+    button:active { transform: scale(.97); }
+    button:disabled { background: #444; cursor: not-allowed; transform: none; }
+
+    /* ── spinner ── */
+    .spinner {
+      display: none;
+      width: 28px; height: 28px;
+      border: 3px solid var(--border);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── video info ── */
+    #info-card { display: none; margin-top: 20px; }
+    .video-meta {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .video-meta img {
+      width: 140px;
+      height: 79px;
+      object-fit: cover;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .video-meta-text h2 { font-size: 1rem; font-weight: 600; line-height: 1.4; }
+    .video-meta-text p  { color: var(--muted); font-size: .82rem; margin-top: 6px; }
+
+    /* ── format list ── */
+    .section-title {
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin: 22px 0 10px;
+    }
+
+    .formats-group { display: flex; flex-direction: column; gap: 6px; }
+
+    .fmt-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      padding: 10px 14px;
+      transition: border-color .15s;
+      font-size: .9rem;
+    }
+    .fmt-label:hover { border-color: #555; }
+    .fmt-label input[type="radio"] { accent-color: var(--red); width: 15px; height: 15px; }
+    .fmt-label.selected { border-color: var(--red); background: #2a1a1a; }
+
+    .fmt-badge {
+      font-size: .72rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-left: auto;
+    }
+    .badge-video { background: #1e3a5f; color: #7eb8f7; }
+    .badge-audio { background: #1e3d2a; color: #7ecf9e; }
+    .badge-ffmpeg { background: #3d2a1e; color: #cf9e7e; font-weight: 400; font-size: .68rem; }
+    .fmt-label.no-ffmpeg { opacity: .45; cursor: not-allowed; }
+    .fmt-label.no-ffmpeg input { pointer-events: none; }
+
+    #ffmpeg-warn {
+      display: none;
+      background: #2a2010;
+      border: 1px solid #7a5a20;
+      border-radius: 8px;
+      color: #cfaa70;
+      font-size: .82rem;
+      margin-top: 14px;
+      padding: 10px 14px;
+      line-height: 1.5;
+    }
+
+    /* ── download button row ── */
+    #dl-row { display: none; margin-top: 20px; }
+    #btn-download { width: 100%; padding: 12px; font-size: 1rem; }
+
+    /* ── progress ── */
+    #progress-section { display: none; margin-top: 20px; }
+    .progress-bar-wrap {
+      background: var(--surface2);
+      border-radius: 6px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      background: var(--red);
+      height: 100%;
+      width: 0%;
+      transition: width .3s ease;
+      border-radius: 6px;
+    }
+    .progress-stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    /* ── done ── */
+    #done-section { display: none; margin-top: 20px; text-align: center; }
+    #done-section p { color: #7ecf9e; font-weight: 600; margin-bottom: 14px; }
+    #btn-save { font-size: .95rem; padding: 12px 32px; }
+
+    /* ── error ── */
+    #error-box {
+      display: none;
+      background: #2a1010;
+      border: 1px solid #7a2020;
+      border-radius: 8px;
+      color: #f07070;
+      font-size: .85rem;
+      margin-top: 16px;
+      padding: 12px 16px;
+    }
+
+    @media (max-width: 480px) {
+      .video-meta { flex-direction: column; }
+      .video-meta img { width: 100%; height: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>YT <span>Downloader</span></h1>
+  <p>Descarga videos y audio de YouTube para uso personal</p>
+</header>
+
+<div class="card">
+  <!-- URL -->
+  <div class="url-row">
+    <input id="url-input" type="text" placeholder="Pega el enlace de YouTube aquí..." />
+    <button id="btn-analyze" onclick="analyzeUrl()">Analizar</button>
+  </div>
+
+  <div class="spinner" id="spinner"></div>
+  <div id="error-box"></div>
+
+  <!-- Video info -->
+  <div id="info-card">
+    <div class="video-meta">
+      <img id="thumb" src="" alt="miniatura" />
+      <div class="video-meta-text">
+        <h2 id="vid-title"></h2>
+        <p id="vid-meta"></p>
+      </div>
+    </div>
+
+    <div id="ffmpeg-warn">
+      <strong>ffmpeg no detectado</strong> — los formatos marcados con <em>ffmpeg</em> requieren que lo instales para combinar video y audio.
+      Instálalo con: <code>winget install ffmpeg</code> y reinicia el servidor.
+    </div>
+
+    <!-- Format groups -->
+    <div class="section-title">Video</div>
+    <div class="formats-group" id="formats-video"></div>
+
+    <div class="section-title">Solo audio</div>
+    <div class="formats-group" id="formats-audio"></div>
+
+    <!-- Download btn -->
+    <div id="dl-row">
+      <button id="btn-download" onclick="startDownload()">Descargar</button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="progress-section">
+    <div class="section-title" style="margin-top:0">Descargando...</div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="pbar"></div></div>
+    <div class="progress-stats">
+      <span id="stat-percent">0%</span>
+      <span id="stat-speed"></span>
+      <span id="stat-eta"></span>
+      <span id="stat-total"></span>
+    </div>
+  </div>
+
+  <!-- Done -->
+  <div id="done-section">
+    <p>Descarga completa</p>
+    <button id="btn-save" onclick="saveFile()">Guardar archivo</button>
+  </div>
+</div>
+
+<script>
+  let selectedFormat = null;
+  let downloadData = null;
+  let hasFFmpeg = false;
+
+  const $ = id => document.getElementById(id);
+
+  function showError(msg) {
+    const box = $('error-box');
+    box.textContent = msg;
+    box.style.display = 'block';
+  }
+  function hideError() { $('error-box').style.display = 'none'; }
+
+  // Detect ffmpeg on load
+  fetch('/check').then(r => r.json()).then(d => { hasFFmpeg = d.ffmpeg; });
+
+  $('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') analyzeUrl(); });
+
+  async function analyzeUrl() {
+    const url = $('url-input').value.trim();
+    if (!url) return;
+
+    hideError();
+    $('info-card').style.display = 'none';
+    $('progress-section').style.display = 'none';
+    $('done-section').style.display = 'none';
+    $('dl-row').style.display = 'none';
+    $('formats-video').innerHTML = '';
+    $('formats-audio').innerHTML = '';
+    $('spinner').style.display = 'block';
+    $('btn-analyze').disabled = true;
+    selectedFormat = null;
+
+    try {
+      const res = await fetch(`/info?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Error al analizar el video');
+
+      $('thumb').src = data.thumbnail;
+      $('vid-title').textContent = data.title;
+      $('vid-meta').textContent = `${data.uploader}  ·  ${data.duration}`;
+
+      const needsWarning = data.formats.some(f => f.needs_ffmpeg) && !hasFFmpeg;
+      $('ffmpeg-warn').style.display = needsWarning ? 'block' : 'none';
+
+      data.formats.forEach((fmt, i) => {
+        const container = fmt.type === 'video' ? $('formats-video') : $('formats-audio');
+        const disabled = fmt.needs_ffmpeg && !hasFFmpeg;
+
+        const lbl = document.createElement('label');
+        lbl.className = 'fmt-label' + (disabled ? ' no-ffmpeg' : '');
+        lbl.dataset.idx = i;
+        if (disabled) lbl.title = 'Requiere ffmpeg instalado';
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'format';
+        radio.value = i;
+        radio.disabled = disabled;
+        radio.addEventListener('change', () => {
+          document.querySelectorAll('.fmt-label').forEach(l => l.classList.remove('selected'));
+          lbl.classList.add('selected');
+          selectedFormat = fmt;
+          $('dl-row').style.display = 'block';
+        });
+
+        const span = document.createElement('span');
+        span.textContent = fmt.label;
+
+        const badge = document.createElement('span');
+        badge.className = `fmt-badge ${fmt.type === 'video' ? 'badge-video' : 'badge-audio'}`;
+        badge.textContent = fmt.type === 'video' ? 'VIDEO' : 'AUDIO';
+
+        lbl.appendChild(radio);
+        lbl.appendChild(span);
+        lbl.appendChild(badge);
+
+        if (fmt.needs_ffmpeg) {
+          const fb = document.createElement('span');
+          fb.className = 'fmt-badge badge-ffmpeg';
+          fb.textContent = 'ffmpeg';
+          lbl.appendChild(fb);
+        }
+
+        container.appendChild(lbl);
+      });
+
+      window._videoTitle = data.title;
+      $('info-card').style.display = 'block';
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      $('spinner').style.display = 'none';
+      $('btn-analyze').disabled = false;
+    }
+  }
+
+  function startDownload() {
+    if (!selectedFormat) return;
+    hideError();
+    $('btn-download').disabled = true;
+    $('progress-section').style.display = 'block';
+    $('done-section').style.display = 'none';
+    $('pbar').style.width = '0%';
+    $('stat-percent').textContent = '0%';
+    $('stat-speed').textContent = '';
+    $('stat-eta').textContent = '';
+    $('stat-total').textContent = '';
+
+    const url = $('url-input').value.trim();
+    const params = new URLSearchParams({
+      url,
+      format_id: selectedFormat.format_id,
+      ext: selectedFormat.ext,
+      title: window._videoTitle || 'video',
+    });
+
+    const es = new EventSource(`/download?${params}`);
+
+    es.onmessage = e => {
+      const d = JSON.parse(e.data);
+
+      if (d.status === 'downloading') {
+        const pct = parseFloat(d.percent) || 0;
+        $('pbar').style.width = Math.min(pct, 100) + '%';
+        $('stat-percent').textContent = d.percent;
+        $('stat-speed').textContent = d.speed;
+        $('stat-eta').textContent = d.eta ? `ETA ${d.eta}` : '';
+        $('stat-total').textContent = d.total;
+      }
+
+      if (d.status === 'complete') {
+        es.close();
+        $('pbar').style.width = '100%';
+        $('stat-percent').textContent = '100%';
+        $('stat-eta').textContent = '';
+        downloadData = d;
+        $('progress-section').style.display = 'none';
+        $('done-section').style.display = 'block';
+        $('btn-download').disabled = false;
+      }
+
+      if (d.status === 'error') {
+        es.close();
+        $('progress-section').style.display = 'none';
+        showError(d.message || 'Error durante la descarga');
+        $('btn-download').disabled = false;
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      $('progress-section').style.display = 'none';
+      showError('Se perdió la conexión con el servidor');
+      $('btn-download').disabled = false;
+    };
+  }
+
+  function saveFile() {
+    if (!downloadData) return;
+    const { download_id, filename } = downloadData;
+    const a = document.createElement('a');
+    a.href = `/file/${download_id}?filename=${encodeURIComponent(filename)}`;
+    a.download = filename;
+    a.click();
+  }
+</script>
+</body>
+</html>
