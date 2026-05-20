@@ -3,448 +3,1157 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YT Downloader</title>
+  <title>Vault · YT Downloader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #0f0f0f;
-      --surface: #1a1a1a;
-      --surface2: #242424;
-      --border: #333;
-      --red: #ff4444;
-      --red-dark: #cc2222;
-      --text: #e8e8e8;
-      --muted: #888;
-      --radius: 10px;
-    }
-
+    html, body { height: 100%; }
     body {
+      font-family: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+      font-feature-settings: "ss01", "cv11";
+      -webkit-font-smoothing: antialiased;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 40px 16px 80px;
+      overflow-x: hidden;
+    }
+    code, .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+
+    :root, [data-theme="dark"] {
+      --bg: oklch(0.16 0.008 250);
+      --bg-grad-1: oklch(0.18 0.012 240);
+      --bg-grad-2: oklch(0.15 0.008 260);
+      --surface: oklch(0.20 0.008 250);
+      --surface-2: oklch(0.23 0.008 250);
+      --surface-3: oklch(0.26 0.010 250);
+      --border: oklch(0.30 0.008 250 / 0.7);
+      --border-strong: oklch(0.38 0.010 250);
+      --text: oklch(0.97 0.005 90);
+      --text-dim: oklch(0.72 0.010 250);
+      --text-muted: oklch(0.55 0.010 250);
+      --accent: oklch(0.86 0.14 170);
+      --accent-2: oklch(0.78 0.14 175);
+      --accent-soft: oklch(0.86 0.14 170 / 0.14);
+      --accent-text: oklch(0.18 0.01 250);
+      --danger: oklch(0.70 0.18 25);
+      --warn: oklch(0.80 0.13 75);
+      --success: oklch(0.82 0.16 155);
+      --video-tag: oklch(0.78 0.13 240);
+      --audio-tag: oklch(0.82 0.15 155);
+      --shadow-card: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 30px 60px -20px oklch(0 0 0 / 0.5);
+    }
+    [data-theme="light"] {
+      --bg: oklch(0.985 0.003 90);
+      --bg-grad-1: oklch(0.97 0.006 170);
+      --bg-grad-2: oklch(0.99 0.003 90);
+      --surface: oklch(1 0 0);
+      --surface-2: oklch(0.97 0.004 250);
+      --surface-3: oklch(0.94 0.005 250);
+      --border: oklch(0.88 0.005 250);
+      --border-strong: oklch(0.78 0.008 250);
+      --text: oklch(0.20 0.010 250);
+      --text-dim: oklch(0.42 0.010 250);
+      --text-muted: oklch(0.58 0.010 250);
+      --accent-text: oklch(0.20 0.01 250);
+      --shadow-card: 0 1px 0 oklch(1 0 0 / 0.6) inset, 0 20px 50px -25px oklch(0.3 0.05 250 / 0.25);
     }
 
-    header {
-      text-align: center;
-      margin-bottom: 36px;
+    body::before {
+      content: "";
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(900px 600px at 85% -10%, var(--accent-soft), transparent 60%),
+        radial-gradient(700px 500px at -10% 110%, oklch(0.50 0.12 270 / 0.10), transparent 60%),
+        linear-gradient(180deg, var(--bg-grad-1), var(--bg-grad-2));
+      z-index: -2;
     }
-    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
-    header h1 span { color: var(--red); }
-    header p { color: var(--muted); margin-top: 6px; font-size: .9rem; }
+    body::after {
+      content: "";
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(to right, oklch(1 0 0 / 0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, oklch(1 0 0 / 0.025) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+      z-index: -1;
+      pointer-events: none;
+    }
+    [data-theme="light"] body::after { background-image:
+      linear-gradient(to right, oklch(0.3 0.01 250 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.3 0.01 250 / 0.05) 1px, transparent 1px); }
 
-    .card {
+    #root { min-height: 100vh; display: flex; flex-direction: column; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    @keyframes pulse-dot { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes barberpole { 0% { background-position: 0 0; } 100% { background-position: 40px 0; } }
+
+    /* Lightweight settings panel (replaces full TweaksPanel for the integrated build) */
+    .settings-fab {
+      position: fixed; right: 18px; bottom: 18px;
+      width: 42px; height: 42px; border-radius: 50%;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-      width: 100%;
-      max-width: 680px;
+      color: var(--text-dim);
+      display: grid; place-items: center;
+      cursor: pointer; z-index: 20;
+      box-shadow: 0 8px 24px -10px oklch(0 0 0 / 0.5);
+      transition: all .15s;
     }
-
-    /* ── URL input ── */
-    .url-row {
-      display: flex;
-      gap: 10px;
-    }
-    .url-row input {
-      flex: 1;
-      background: var(--surface2);
+    .settings-fab:hover { color: var(--text); transform: translateY(-1px); }
+    .settings-panel {
+      position: fixed; right: 18px; bottom: 72px;
+      width: 260px;
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: .95rem;
-      padding: 10px 14px;
-      outline: none;
-      transition: border-color .2s;
+      border-radius: 14px;
+      padding: 14px;
+      z-index: 20;
+      box-shadow: 0 30px 60px -20px oklch(0 0 0 / 0.5);
+      animation: fadeUp .2s ease both;
     }
-    .url-row input:focus { border-color: var(--red); }
-    .url-row input::placeholder { color: var(--muted); }
-
-    button {
-      background: var(--red);
-      border: none;
-      border-radius: 8px;
-      color: #fff;
-      cursor: pointer;
-      font-size: .9rem;
-      font-weight: 600;
-      padding: 10px 20px;
-      transition: background .15s, transform .1s;
-      white-space: nowrap;
+    .settings-panel h3 {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); font-weight: 600;
+      margin: 8px 0 8px;
     }
-    button:hover { background: var(--red-dark); }
-    button:active { transform: scale(.97); }
-    button:disabled { background: #444; cursor: not-allowed; transform: none; }
-
-    /* ── spinner ── */
-    .spinner {
-      display: none;
-      width: 28px; height: 28px;
-      border: 3px solid var(--border);
-      border-top-color: var(--red);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      margin: 20px auto;
+    .settings-panel h3:first-child { margin-top: 0; }
+    .settings-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; margin-bottom: 8px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── video info ── */
-    #info-card { display: none; margin-top: 20px; }
-    .video-meta {
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
+    .settings-row > span { font-size: 13px; color: var(--text-dim); }
+    .seg {
+      display: flex; padding: 2px; border-radius: 8px;
+      background: var(--surface-2); border: 1px solid var(--border);
     }
-    .video-meta img {
-      width: 140px;
-      height: 79px;
-      object-fit: cover;
-      border-radius: 6px;
-      flex-shrink: 0;
+    .seg button {
+      all: unset; flex: 1; padding: 4px 10px; cursor: pointer;
+      font-size: 12px; color: var(--text-dim); text-align: center;
+      border-radius: 6px; transition: all .15s;
     }
-    .video-meta-text h2 { font-size: 1rem; font-weight: 600; line-height: 1.4; }
-    .video-meta-text p  { color: var(--muted); font-size: .82rem; margin-top: 6px; }
-
-    /* ── format list ── */
-    .section-title {
-      color: var(--muted);
-      font-size: .75rem;
-      font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      margin: 22px 0 10px;
+    .seg button.on {
+      background: var(--accent); color: var(--accent-text); font-weight: 500;
     }
-
-    .formats-group { display: flex; flex-direction: column; gap: 6px; }
-
-    .fmt-label {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      cursor: pointer;
-      padding: 10px 14px;
-      transition: border-color .15s;
-      font-size: .9rem;
+    .swatches { display: flex; gap: 6px; }
+    .swatches button {
+      all: unset; width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+      box-shadow: 0 0 0 1px var(--border), inset 0 1px 0 oklch(1 0 0 / 0.15);
+      transition: all .15s;
     }
-    .fmt-label:hover { border-color: #555; }
-    .fmt-label input[type="radio"] { accent-color: var(--red); width: 15px; height: 15px; }
-    .fmt-label.selected { border-color: var(--red); background: #2a1a1a; }
-
-    .fmt-badge {
-      font-size: .72rem;
-      font-weight: 700;
-      padding: 2px 7px;
-      border-radius: 4px;
-      margin-left: auto;
+    .swatches button:hover { transform: translateY(-1px); }
+    .swatches button.on { box-shadow: 0 0 0 2px var(--text), inset 0 1px 0 oklch(1 0 0 / 0.15); }
+    .toggle {
+      position: relative; width: 32px; height: 18px;
+      background: var(--surface-3); border-radius: 999px;
+      border: 1px solid var(--border); cursor: pointer; transition: background .15s;
     }
-    .badge-video { background: #1e3a5f; color: #7eb8f7; }
-    .badge-audio { background: #1e3d2a; color: #7ecf9e; }
-    .badge-ffmpeg { background: #3d2a1e; color: #cf9e7e; font-weight: 400; font-size: .68rem; }
-    .fmt-label.no-ffmpeg { opacity: .45; cursor: not-allowed; }
-    .fmt-label.no-ffmpeg input { pointer-events: none; }
-
-    #ffmpeg-warn {
-      display: none;
-      background: #2a2010;
-      border: 1px solid #7a5a20;
-      border-radius: 8px;
-      color: #cfaa70;
-      font-size: .82rem;
-      margin-top: 14px;
-      padding: 10px 14px;
-      line-height: 1.5;
+    .toggle::after {
+      content: ""; position: absolute; top: 1px; left: 1px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--text-dim); transition: all .15s;
     }
-
-    /* ── download button row ── */
-    #dl-row { display: none; margin-top: 20px; }
-    #btn-download { width: 100%; padding: 12px; font-size: 1rem; }
-
-    /* ── progress ── */
-    #progress-section { display: none; margin-top: 20px; }
-    .progress-bar-wrap {
-      background: var(--surface2);
-      border-radius: 6px;
-      height: 8px;
-      overflow: hidden;
-    }
-    .progress-bar-fill {
-      background: var(--red);
-      height: 100%;
-      width: 0%;
-      transition: width .3s ease;
-      border-radius: 6px;
-    }
-    .progress-stats {
-      display: flex;
-      justify-content: space-between;
-      font-size: .8rem;
-      color: var(--muted);
-      margin-top: 8px;
-    }
-
-    /* ── done ── */
-    #done-section { display: none; margin-top: 20px; text-align: center; }
-    #done-section p { color: #7ecf9e; font-weight: 600; margin-bottom: 14px; }
-    #btn-save { font-size: .95rem; padding: 12px 32px; }
-
-    /* ── error ── */
-    #error-box {
-      display: none;
-      background: #2a1010;
-      border: 1px solid #7a2020;
-      border-radius: 8px;
-      color: #f07070;
-      font-size: .85rem;
-      margin-top: 16px;
-      padding: 12px 16px;
-    }
-
-    @media (max-width: 480px) {
-      .video-meta { flex-direction: column; }
-      .video-meta img { width: 100%; height: auto; }
-    }
+    .toggle.on { background: var(--accent); }
+    .toggle.on::after { left: 15px; background: var(--accent-text); }
   </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
 <body>
+  <div id="root"></div>
 
-<header>
-  <h1>YT <span>Downloader</span></h1>
-  <p>Descarga videos y audio de YouTube para uso personal</p>
-</header>
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-<div class="card">
-  <!-- URL -->
-  <div class="url-row">
-    <input id="url-input" type="text" placeholder="Pega el enlace de YouTube aquí..." />
-    <button id="btn-analyze" onclick="analyzeUrl()">Analizar</button>
-  </div>
+    // ── Accent palettes ─────────────────────────────────────────────────────
+    const ACCENTS = {
+      mint:   { name: "Mint",   color: "oklch(0.86 0.14 170)", color2: "oklch(0.78 0.14 175)", soft: "oklch(0.86 0.14 170 / 0.14)", swatch: "#5EE8C4" },
+      amber:  { name: "Amber",  color: "oklch(0.84 0.15 75)",  color2: "oklch(0.78 0.15 70)",  soft: "oklch(0.84 0.15 75 / 0.14)",  swatch: "#FFB454" },
+      violet: { name: "Violet", color: "oklch(0.78 0.15 295)", color2: "oklch(0.72 0.16 295)", soft: "oklch(0.78 0.15 295 / 0.16)", swatch: "#B196FF" },
+      coral:  { name: "Coral",  color: "oklch(0.78 0.15 25)",  color2: "oklch(0.72 0.16 25)",  soft: "oklch(0.78 0.15 25 / 0.16)",  swatch: "#FF9079" },
+    };
 
-  <div class="spinner" id="spinner"></div>
-  <div id="error-box"></div>
+    const STORAGE_KEY = "vault.settings.v1";
+    const HISTORY_KEY = "vault.history.v1";
 
-  <!-- Video info -->
-  <div id="info-card">
-    <div class="video-meta">
-      <img id="thumb" src="" alt="miniatura" />
-      <div class="video-meta-text">
-        <h2 id="vid-title"></h2>
-        <p id="vid-meta"></p>
+    // ── Icons ───────────────────────────────────────────────────────────────
+    const Icon = ({ name, size = 16, ...rest }) => {
+      const props = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", ...rest };
+      const paths = {
+        link: <><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></>,
+        video: <><rect x="2.5" y="6" width="14" height="12" rx="2"/><path d="m17 10 4-2v8l-4-2"/></>,
+        audio: <><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></>,
+        download: <><path d="M12 4v12"/><path d="m6 12 6 6 6-6"/><path d="M4 20h16"/></>,
+        check: <path d="m5 12 5 5 9-11"/>,
+        sparkle: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></>,
+        close: <><path d="m6 6 12 12"/><path d="M18 6 6 18"/></>,
+        history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 8v4l3 2"/></>,
+        folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>,
+        paste: <><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M9 4h6v2H9z"/></>,
+        arrow: <><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></>,
+        warn: <><path d="M12 3 2 20h20L12 3z"/><path d="M12 9v5"/><circle cx="12" cy="17.5" r=".8" fill="currentColor" stroke="none"/></>,
+        bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" stroke="none"/>,
+        cog: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></>,
+      };
+      return <svg {...props}>{paths[name]}</svg>;
+    };
+
+    // ── Logo monogram ───────────────────────────────────────────────────────
+    const Logo = () => (
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 9,
+          background: "linear-gradient(140deg, var(--accent), var(--accent-2))",
+          display: "grid", placeItems: "center",
+          boxShadow: "0 6px 20px -8px var(--accent), inset 0 1px 0 oklch(1 0 0 / 0.3)",
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M8 5v14l11-7L8 5z" fill="var(--accent-text)"/>
+            <path d="M3 18v2h6" stroke="var(--accent-text)" strokeWidth="2.2" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+          <div style={{ fontWeight: 600, letterSpacing: "-0.01em", fontSize: 15 }}>Vault</div>
+          <div className="mono" style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.04em" }}>by devtech</div>
+        </div>
       </div>
-    </div>
+    );
 
-    <div id="ffmpeg-warn">
-      <strong>ffmpeg no detectado</strong> — los formatos marcados con <em>ffmpeg</em> requieren que lo instales para combinar video y audio.
-      Instálalo con: <code>winget install ffmpeg</code> y reinicia el servidor.
-    </div>
-
-    <!-- Format groups -->
-    <div class="section-title">Video</div>
-    <div class="formats-group" id="formats-video"></div>
-
-    <div class="section-title">Solo audio</div>
-    <div class="formats-group" id="formats-audio"></div>
-
-    <!-- Download btn -->
-    <div id="dl-row">
-      <button id="btn-download" onclick="startDownload()">Descargar</button>
-    </div>
-  </div>
-
-  <!-- Progress -->
-  <div id="progress-section">
-    <div class="section-title" style="margin-top:0">Descargando...</div>
-    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="pbar"></div></div>
-    <div class="progress-stats">
-      <span id="stat-percent">0%</span>
-      <span id="stat-speed"></span>
-      <span id="stat-eta"></span>
-      <span id="stat-total"></span>
-    </div>
-  </div>
-
-  <!-- Done -->
-  <div id="done-section">
-    <p>Descarga completa</p>
-    <button id="btn-save" onclick="saveFile()">Guardar archivo</button>
-  </div>
-</div>
-
-<script>
-  let selectedFormat = null;
-  let downloadData = null;
-  let hasFFmpeg = false;
-
-  const $ = id => document.getElementById(id);
-
-  function showError(msg) {
-    const box = $('error-box');
-    box.textContent = msg;
-    box.style.display = 'block';
-  }
-  function hideError() { $('error-box').style.display = 'none'; }
-
-  // Detect ffmpeg on load
-  fetch('/check').then(r => r.json()).then(d => { hasFFmpeg = d.ffmpeg; });
-
-  $('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') analyzeUrl(); });
-
-  async function analyzeUrl() {
-    const url = $('url-input').value.trim();
-    if (!url) return;
-
-    hideError();
-    $('info-card').style.display = 'none';
-    $('progress-section').style.display = 'none';
-    $('done-section').style.display = 'none';
-    $('dl-row').style.display = 'none';
-    $('formats-video').innerHTML = '';
-    $('formats-audio').innerHTML = '';
-    $('spinner').style.display = 'block';
-    $('btn-analyze').disabled = true;
-    selectedFormat = null;
-
-    try {
-      const res = await fetch(`/info?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Error al analizar el video');
-
-      $('thumb').src = data.thumbnail;
-      $('vid-title').textContent = data.title;
-      $('vid-meta').textContent = `${data.uploader}  ·  ${data.duration}`;
-
-      const needsWarning = data.formats.some(f => f.needs_ffmpeg) && !hasFFmpeg;
-      $('ffmpeg-warn').style.display = needsWarning ? 'block' : 'none';
-
-      data.formats.forEach((fmt, i) => {
-        const container = fmt.type === 'video' ? $('formats-video') : $('formats-audio');
-        const disabled = fmt.needs_ffmpeg && !hasFFmpeg;
-
-        const lbl = document.createElement('label');
-        lbl.className = 'fmt-label' + (disabled ? ' no-ffmpeg' : '');
-        lbl.dataset.idx = i;
-        if (disabled) lbl.title = 'Requiere ffmpeg instalado';
-
-        const radio = document.createElement('input');
-        radio.type = 'radio';
-        radio.name = 'format';
-        radio.value = i;
-        radio.disabled = disabled;
-        radio.addEventListener('change', () => {
-          document.querySelectorAll('.fmt-label').forEach(l => l.classList.remove('selected'));
-          lbl.classList.add('selected');
-          selectedFormat = fmt;
-          $('dl-row').style.display = 'block';
-        });
-
-        const span = document.createElement('span');
-        span.textContent = fmt.label;
-
-        const badge = document.createElement('span');
-        badge.className = `fmt-badge ${fmt.type === 'video' ? 'badge-video' : 'badge-audio'}`;
-        badge.textContent = fmt.type === 'video' ? 'VIDEO' : 'AUDIO';
-
-        lbl.appendChild(radio);
-        lbl.appendChild(span);
-        lbl.appendChild(badge);
-
-        if (fmt.needs_ffmpeg) {
-          const fb = document.createElement('span');
-          fb.className = 'fmt-badge badge-ffmpeg';
-          fb.textContent = 'ffmpeg';
-          lbl.appendChild(fb);
-        }
-
-        container.appendChild(lbl);
-      });
-
-      window._videoTitle = data.title;
-      $('info-card').style.display = 'block';
-    } catch (err) {
-      showError(err.message);
-    } finally {
-      $('spinner').style.display = 'none';
-      $('btn-analyze').disabled = false;
+    // ── Parse a backend format into display fields ──────────────────────────
+    // Backend labels look like:
+    //   "Mejor calidad (mp4)"            "Solo audio (m4a)"
+    //   "1080p (mp4) ~142MB"             "Audio 256kbps (m4a) ~46MB"
+    function parseFormat(fmt, i) {
+      const sizeMatch = fmt.label.match(/~\s*([\d.]+\s*[KMG]B)/i);
+      const size = sizeMatch ? "~" + sizeMatch[1].replace(/\s+/g, "") : "";
+      let main = fmt.label.replace(/\s*~[\d.]+\s*[KMG]B\s*/i, "").trim();
+      const extMatch = main.match(/\(([^)]+)\)/);
+      const ext = extMatch ? extMatch[1] : (fmt.ext || "");
+      main = main.replace(/\s*\([^)]+\)\s*/, "").trim();
+      const qmap = { "2160p": "4K", "1440p": "2K", "1080p": "Full HD", "720p": "HD", "480p": "SD", "360p": "LD", "240p": "LD" };
+      let quality = "";
+      if (/^\d{3,4}p$/.test(main)) quality = main;
+      const audioBitMatch = main.match(/(\d{2,4})\s*kbps/i);
+      let sub = ext;
+      if (qmap[main]) sub = `${qmap[main]} · ${ext}`;
+      else if (audioBitMatch) sub = `${audioBitMatch[1]} kbps · ${ext}`;
+      else if (ext) sub = ext;
+      return {
+        id: String(i),
+        format_id: fmt.format_id,
+        ext: fmt.ext,
+        label: main || fmt.label,
+        sub,
+        type: fmt.type,
+        quality,
+        size,
+        needsFfmpeg: fmt.needs_ffmpeg,
+        recommended: i === 0 || /^Mejor calidad$/i.test(main) || /^Solo audio$/i.test(main),
+      };
     }
-  }
 
-  function startDownload() {
-    if (!selectedFormat) return;
-    hideError();
-    $('btn-download').disabled = true;
-    $('progress-section').style.display = 'block';
-    $('done-section').style.display = 'none';
-    $('pbar').style.width = '0%';
-    $('stat-percent').textContent = '0%';
-    $('stat-speed').textContent = '';
-    $('stat-eta').textContent = '';
-    $('stat-total').textContent = '';
+    // ── Placeholder thumbnail (used while loading or on fetch failure) ──────
+    const PlaceholderThumb = ({ duration }) => (
+      <div style={{
+        position: "relative", width: "100%", aspectRatio: "16 / 9",
+        borderRadius: 10, overflow: "hidden",
+        background: "linear-gradient(135deg, oklch(0.45 0.16 250), oklch(0.30 0.14 290))",
+        boxShadow: "inset 0 0 0 1px oklch(1 0 0 / 0.06)",
+      }}>
+        <svg viewBox="0 0 320 180" width="100%" height="100%" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, opacity: 0.35, mixBlendMode: "overlay" }}>
+          {Array.from({ length: 40 }).map((_, i) => (
+            <rect key={i} x={i * 8 + 2} y={90 - Math.abs(Math.sin(i * 0.7) * 60)} width="4" height={Math.abs(Math.sin(i * 0.7) * 120) + 20} fill="white" rx="1"/>
+          ))}
+        </svg>
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 80% at 50% 100%, oklch(0 0 0 / 0.45), transparent 60%)" }}/>
+        {duration && (
+          <div className="mono" style={{
+            position: "absolute", right: 8, bottom: 8,
+            background: "oklch(0 0 0 / 0.75)", color: "white",
+            fontSize: 11, padding: "2px 6px", borderRadius: 4,
+          }}>{duration}</div>
+        )}
+      </div>
+    );
 
-    const url = $('url-input').value.trim();
-    const params = new URLSearchParams({
-      url,
-      format_id: selectedFormat.format_id,
-      ext: selectedFormat.ext,
-      title: window._videoTitle || 'video',
-    });
-
-    const es = new EventSource(`/download?${params}`);
-
-    es.onmessage = e => {
-      const d = JSON.parse(e.data);
-
-      if (d.status === 'downloading') {
-        const pct = parseFloat(d.percent) || 0;
-        $('pbar').style.width = Math.min(pct, 100) + '%';
-        $('stat-percent').textContent = d.percent;
-        $('stat-speed').textContent = d.speed;
-        $('stat-eta').textContent = d.eta ? `ETA ${d.eta}` : '';
-        $('stat-total').textContent = d.total;
-      }
-
-      if (d.status === 'complete') {
-        es.close();
-        $('pbar').style.width = '100%';
-        $('stat-percent').textContent = '100%';
-        $('stat-eta').textContent = '';
-        downloadData = d;
-        $('progress-section').style.display = 'none';
-        $('done-section').style.display = 'block';
-        $('btn-download').disabled = false;
-      }
-
-      if (d.status === 'error') {
-        es.close();
-        $('progress-section').style.display = 'none';
-        showError(d.message || 'Error durante la descarga');
-        $('btn-download').disabled = false;
-      }
+    const Thumb = ({ src, duration }) => {
+      const [errored, setErrored] = useState(false);
+      if (!src || errored) return <PlaceholderThumb duration={duration}/>;
+      return (
+        <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 10, overflow: "hidden", boxShadow: "inset 0 0 0 1px oklch(1 0 0 / 0.06)" }}>
+          <img src={src} alt="" onError={() => setErrored(true)}
+               style={{ width: "100%", height: "100%", objectFit: "cover" }}/>
+          {duration && (
+            <div className="mono" style={{
+              position: "absolute", right: 8, bottom: 8,
+              background: "oklch(0 0 0 / 0.75)", color: "white",
+              fontSize: 11, padding: "2px 6px", borderRadius: 4,
+            }}>{duration}</div>
+          )}
+        </div>
+      );
     };
 
-    es.onerror = () => {
-      es.close();
-      $('progress-section').style.display = 'none';
-      showError('Se perdió la conexión con el servidor');
-      $('btn-download').disabled = false;
+    // ── Format card ─────────────────────────────────────────────────────────
+    const FormatCard = ({ fmt, selected, onSelect, hasFfmpeg, density }) => {
+      const disabled = fmt.needsFfmpeg && !hasFfmpeg;
+      const pad = density === "compact" ? "10px 12px" : "14px 14px";
+      const isVideo = fmt.type === "video";
+      return (
+        <button
+          onClick={() => !disabled && onSelect(fmt)}
+          disabled={disabled}
+          title={disabled ? "Requiere ffmpeg" : undefined}
+          style={{
+            all: "unset",
+            display: "grid", gridTemplateColumns: "auto 1fr auto",
+            alignItems: "center", gap: 12,
+            cursor: disabled ? "not-allowed" : "pointer",
+            padding: pad, borderRadius: 12,
+            background: selected ? "var(--accent-soft)" : "var(--surface-2)",
+            border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+            boxShadow: selected ? "0 0 0 3px var(--accent-soft)" : "none",
+            transition: "all .15s ease",
+            opacity: disabled ? 0.45 : 1,
+          }}
+          onMouseEnter={e => { if (!disabled && !selected) e.currentTarget.style.borderColor = "var(--border-strong)"; }}
+          onMouseLeave={e => { if (!disabled && !selected) e.currentTarget.style.borderColor = "var(--border)"; }}
+        >
+          <div style={{
+            width: 36, height: 36, borderRadius: 8,
+            display: "grid", placeItems: "center",
+            background: isVideo ? "oklch(0.78 0.13 240 / 0.14)" : "oklch(0.82 0.15 155 / 0.14)",
+            color: isVideo ? "var(--video-tag)" : "var(--audio-tag)",
+            border: `1px solid ${isVideo ? "oklch(0.78 0.13 240 / 0.3)" : "oklch(0.82 0.15 155 / 0.3)"}`,
+          }}>
+            <Icon name={isVideo ? "video" : "audio"} size={17}/>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 500, fontSize: 14, color: "var(--text)" }}>{fmt.label}</span>
+              {fmt.recommended && (
+                <span style={{
+                  fontSize: 9.5, fontWeight: 600, letterSpacing: "0.08em",
+                  color: "var(--accent)", textTransform: "uppercase",
+                  padding: "2px 6px", borderRadius: 4,
+                  background: "var(--accent-soft)",
+                  border: "1px solid color-mix(in oklch, var(--accent), transparent 70%)",
+                }}>Recom.</span>
+              )}
+              {fmt.needsFfmpeg && (
+                <span className="mono" style={{
+                  fontSize: 10, color: "var(--warn)",
+                  padding: "1px 5px", borderRadius: 4,
+                  border: "1px solid oklch(0.80 0.13 75 / 0.35)",
+                  background: "oklch(0.80 0.13 75 / 0.10)",
+                }}>ffmpeg</span>
+              )}
+            </div>
+            <div className="mono" style={{ fontSize: 11.5, color: "var(--text-muted)", letterSpacing: "0.02em" }}>{fmt.sub}</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+            {fmt.size && <span className="mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>{fmt.size}</span>}
+            <div style={{
+              width: 16, height: 16, borderRadius: "50%",
+              border: `1.5px solid ${selected ? "var(--accent)" : "var(--border-strong)"}`,
+              display: "grid", placeItems: "center",
+              background: selected ? "var(--accent)" : "transparent",
+              transition: "all .15s ease",
+            }}>
+              {selected && <Icon name="check" size={10} style={{ color: "var(--accent-text)", strokeWidth: 3 }}/>}
+            </div>
+          </div>
+        </button>
+      );
     };
-  }
 
-  function saveFile() {
-    if (!downloadData) return;
-    const { download_id, filename } = downloadData;
-    const a = document.createElement('a');
-    a.href = `/file/${download_id}?filename=${encodeURIComponent(filename)}`;
-    a.download = filename;
-    a.click();
-  }
-</script>
+    // ── Progress view ───────────────────────────────────────────────────────
+    const ProgressView = ({ pct, speed, eta, total, fmtName }) => {
+      const R = 38;
+      const C = 2 * Math.PI * R;
+      return (
+        <div style={{
+          display: "grid", gridTemplateColumns: "auto 1fr", gap: 22,
+          padding: 20, borderRadius: 14,
+          background: "var(--surface-2)",
+          border: "1px solid var(--border)",
+        }}>
+          <div style={{ position: "relative", width: 92, height: 92 }}>
+            <svg width="92" height="92" viewBox="0 0 92 92">
+              <circle cx="46" cy="46" r={R} fill="none" stroke="var(--surface-3)" strokeWidth="6"/>
+              <circle cx="46" cy="46" r={R} fill="none"
+                stroke="var(--accent)" strokeWidth="6" strokeLinecap="round"
+                strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)}
+                transform="rotate(-90 46 46)"
+                style={{ transition: "stroke-dashoffset .3s ease" }}/>
+            </svg>
+            <div className="mono" style={{
+              position: "absolute", inset: 0, display: "grid", placeItems: "center",
+              fontSize: 18, fontWeight: 600, letterSpacing: "-0.02em",
+            }}>
+              {Math.floor(pct)}<span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 1 }}>%</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 0 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", animation: "pulse-dot 1.2s ease-in-out infinite" }}/>
+                <span style={{ fontSize: 13, color: "var(--text-dim)", fontWeight: 500 }}>Descargando</span>
+                {fmtName && <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>· {fmtName}</span>}
+              </div>
+              <div style={{ marginTop: 12, height: 6, borderRadius: 999, overflow: "hidden", background: "var(--surface-3)", position: "relative" }}>
+                <div style={{
+                  height: "100%", width: `${pct}%`,
+                  background: "linear-gradient(90deg, var(--accent), var(--accent-2))",
+                  borderRadius: 999, transition: "width .3s ease",
+                  boxShadow: "0 0 12px var(--accent-soft)",
+                  position: "relative", overflow: "hidden",
+                }}>
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    backgroundImage: "linear-gradient(45deg, oklch(1 0 0 / 0.25) 25%, transparent 25%, transparent 50%, oklch(1 0 0 / 0.25) 50%, oklch(1 0 0 / 0.25) 75%, transparent 75%)",
+                    backgroundSize: "20px 20px",
+                    animation: "barberpole 1s linear infinite",
+                    opacity: 0.4,
+                  }}/>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 18, marginTop: 14, flexWrap: "wrap" }}>
+              <Stat label="velocidad" value={speed}/>
+              <Stat label="restante" value={eta}/>
+              <Stat label="total" value={total}/>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const Stat = ({ label, value }) => (
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span className="mono" style={{ fontSize: 9.5, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</span>
+        <span className="mono" style={{ fontSize: 12.5, color: "var(--text)", fontWeight: 500 }}>{value || "—"}</span>
+      </div>
+    );
+
+    // ── History card ────────────────────────────────────────────────────────
+    const HistoryCard = ({ items, onSave, onClear }) => (
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: 16, padding: 18, boxShadow: "var(--shadow-card)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <Icon name="history" size={14} style={{ color: "var(--text-muted)" }}/>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "0.02em" }}>Recientes</span>
+          <span className="mono" style={{ marginLeft: "auto", fontSize: 10.5, color: "var(--text-muted)" }}>{items.length}</span>
+          {items.length > 0 && (
+            <button onClick={onClear} style={{
+              all: "unset", cursor: "pointer", fontSize: 10.5, color: "var(--text-muted)",
+              padding: "2px 6px", borderRadius: 4,
+            }} title="Limpiar historial">limpiar</button>
+          )}
+        </div>
+        {items.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: "var(--text-muted)", padding: "8px 4px", lineHeight: 1.5 }}>
+            Tus descargas recientes aparecerán aquí.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {items.map((it, i) => (
+              <div key={i} style={{
+                display: "grid", gridTemplateColumns: "1fr auto", gap: 10,
+                padding: "10px 10px", borderRadius: 10,
+                alignItems: "center", transition: "background .15s",
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = "var(--surface-2)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{it.title}</div>
+                  <div className="mono" style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 2 }}>
+                    {it.quality}{it.size ? ` · ${it.size}` : ""} · {it.when}
+                  </div>
+                </div>
+                {it.download_id && (
+                  <button onClick={() => onSave(it)} style={{
+                    all: "unset", cursor: "pointer", color: "var(--text-muted)",
+                    padding: "6px 8px", borderRadius: 6,
+                  }} title="Volver a guardar">
+                    <Icon name="download" size={13}/>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+
+    // ── Tips card ───────────────────────────────────────────────────────────
+    const TipsCard = () => (
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: 16, padding: 18, boxShadow: "var(--shadow-card)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <Icon name="bolt" size={14} style={{ color: "var(--accent)" }}/>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "0.02em" }}>Atajos</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {[
+            ["Pegar y analizar", ["Ctrl", "V"]],
+            ["Analizar URL", ["↵"]],
+            ["Iniciar descarga", ["Ctrl", "↵"]],
+          ].map(([label, keys]) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{label}</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                {keys.map((k, i) => <Kbd key={i}>{k}</Kbd>)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    const Kbd = ({ children }) => (
+      <span className="mono" style={{
+        fontSize: 10.5, padding: "2px 6px", borderRadius: 5,
+        background: "var(--surface-2)", border: "1px solid var(--border)",
+        color: "var(--text-dim)", minWidth: 20, textAlign: "center",
+      }}>{children}</span>
+    );
+
+    // ── Button styles ───────────────────────────────────────────────────────
+    const btnPrimary = {
+      all: "unset", cursor: "pointer",
+      background: "linear-gradient(180deg, var(--accent), var(--accent-2))",
+      color: "var(--accent-text)",
+      fontWeight: 600, fontSize: 14,
+      padding: "11px 18px", borderRadius: 10,
+      display: "inline-flex", alignItems: "center", gap: 8,
+      boxShadow: "0 1px 0 oklch(1 0 0 / 0.25) inset, 0 8px 20px -10px var(--accent)",
+      transition: "transform .08s, filter .15s",
+    };
+    const btnGhost = {
+      all: "unset", cursor: "pointer",
+      color: "var(--text-dim)", fontSize: 13, fontWeight: 500,
+      padding: "10px 14px", borderRadius: 10,
+      background: "var(--surface-2)", border: "1px solid var(--border)",
+      display: "inline-flex", alignItems: "center", gap: 7,
+      transition: "all .15s",
+    };
+    const btnGhostSmall = { ...btnGhost, padding: "6px 8px", fontSize: 11.5, color: "var(--text-muted)" };
+
+    // ── Top bar ─────────────────────────────────────────────────────────────
+    const TopBar = ({ hasFfmpeg, ffmpegChecked }) => (
+      <header style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "16px 28px",
+        borderBottom: "1px solid var(--border)",
+        background: "color-mix(in oklch, var(--bg), transparent 30%)",
+        backdropFilter: "blur(12px)",
+        position: "sticky", top: 0, zIndex: 5,
+      }}>
+        <Logo/>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "6px 10px", borderRadius: 999,
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+            fontSize: 11.5,
+          }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: "50%",
+              background: !ffmpegChecked ? "var(--text-muted)" : hasFfmpeg ? "var(--success)" : "var(--warn)",
+              boxShadow: ffmpegChecked ? `0 0 8px ${hasFfmpeg ? "var(--success)" : "var(--warn)"}` : "none",
+            }}/>
+            <span className="mono" style={{ color: "var(--text-dim)", letterSpacing: "0.02em" }}>
+              ffmpeg {!ffmpegChecked ? "…" : hasFfmpeg ? "ok" : "ausente"}
+            </span>
+          </div>
+        </div>
+      </header>
+    );
+
+    // ── Settings panel ──────────────────────────────────────────────────────
+    const SettingsPanel = ({ settings, set, onClose }) => (
+      <>
+        <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 19 }}/>
+        <div className="settings-panel">
+          <h3>Tema</h3>
+          <div className="seg">
+            {["dark", "light"].map(v => (
+              <button key={v} className={settings.theme === v ? "on" : ""} onClick={() => set("theme", v)}>
+                {v === "dark" ? "Oscuro" : "Claro"}
+              </button>
+            ))}
+          </div>
+          <h3>Acento</h3>
+          <div className="swatches">
+            {Object.entries(ACCENTS).map(([k, a]) => (
+              <button key={k} className={settings.accent === k ? "on" : ""}
+                style={{ background: a.color }} onClick={() => set("accent", k)} title={a.name}/>
+            ))}
+          </div>
+          <h3>Densidad</h3>
+          <div className="seg">
+            {[["comfortable", "Cómoda"], ["compact", "Compacta"]].map(([v, l]) => (
+              <button key={v} className={settings.density === v ? "on" : ""} onClick={() => set("density", v)}>{l}</button>
+            ))}
+          </div>
+          <h3>Panel lateral</h3>
+          <div className="settings-row">
+            <span>Mostrar historial</span>
+            <div className={"toggle " + (settings.showHistory ? "on" : "")} onClick={() => set("showHistory", !settings.showHistory)}/>
+          </div>
+          <div className="settings-row">
+            <span>Mostrar atajos</span>
+            <div className={"toggle " + (settings.showShortcuts ? "on" : "")} onClick={() => set("showShortcuts", !settings.showShortcuts)}/>
+          </div>
+        </div>
+      </>
+    );
+
+    // ── Main app ────────────────────────────────────────────────────────────
+    const DEFAULT_SETTINGS = {
+      theme: "dark", accent: "mint", density: "comfortable",
+      showHistory: true, showShortcuts: true,
+    };
+
+    const loadSettings = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+      } catch { return DEFAULT_SETTINGS; }
+    };
+    const loadHistory = () => {
+      try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch { return []; }
+    };
+
+    const App = () => {
+      const [settings, setSettings] = useState(loadSettings);
+      const [url, setUrl] = useState("");
+      const [stage, setStage] = useState("idle"); // idle | analyzing | ready | downloading | done | error
+      const [video, setVideo] = useState(null);
+      const [formats, setFormats] = useState([]);
+      const [selectedFmt, setSelectedFmt] = useState(null);
+      const [error, setError] = useState("");
+      const [pct, setPct] = useState(0);
+      const [speed, setSpeed] = useState("");
+      const [eta, setEta] = useState("");
+      const [total, setTotal] = useState("");
+      const [hasFfmpeg, setHasFfmpeg] = useState(false);
+      const [ffmpegChecked, setFfmpegChecked] = useState(false);
+      const [history, setHistory] = useState(loadHistory);
+      const [done, setDone] = useState(null);
+      const [settingsOpen, setSettingsOpen] = useState(false);
+      const esRef = useRef(null);
+
+      // Persist settings + history
+      useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch {} }, [settings]);
+      useEffect(() => { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch {} }, [history]);
+
+      // Apply theme + accent
+      useEffect(() => {
+        document.documentElement.setAttribute("data-theme", settings.theme);
+        const a = ACCENTS[settings.accent] || ACCENTS.mint;
+        const r = document.documentElement.style;
+        r.setProperty("--accent", a.color);
+        r.setProperty("--accent-2", a.color2);
+        r.setProperty("--accent-soft", a.soft);
+      }, [settings.theme, settings.accent]);
+
+      // Check ffmpeg
+      useEffect(() => {
+        fetch("/check").then(r => r.json()).then(d => {
+          setHasFfmpeg(!!d.ffmpeg);
+          setFfmpegChecked(true);
+        }).catch(() => setFfmpegChecked(true));
+      }, []);
+
+      const setSetting = useCallback((k, v) => setSettings(s => ({ ...s, [k]: v })), []);
+
+      const reset = () => {
+        setStage("idle"); setVideo(null); setFormats([]);
+        setSelectedFmt(null); setError(""); setPct(0); setDone(null);
+        setSpeed(""); setEta(""); setTotal("");
+        if (esRef.current) { esRef.current.close(); esRef.current = null; }
+      };
+
+      const analyze = async () => {
+        const u = url.trim();
+        if (!u) return;
+        setStage("analyzing");
+        setError(""); setSelectedFmt(null); setDone(null);
+        setVideo(null); setFormats([]);
+        try {
+          const res = await fetch(`/info?url=${encodeURIComponent(u)}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Error al analizar el video");
+          setVideo({
+            title: data.title,
+            uploader: data.uploader,
+            duration: data.duration,
+            thumbnail: data.thumbnail,
+          });
+          const parsed = data.formats.map(parseFormat);
+          setFormats(parsed);
+          // Pre-select first non-disabled, recommended video
+          const pre = parsed.find(f => f.recommended && f.type === "video" && (!f.needsFfmpeg || hasFfmpeg))
+                  || parsed.find(f => f.type === "video" && (!f.needsFfmpeg || hasFfmpeg))
+                  || parsed.find(f => !f.needsFfmpeg || hasFfmpeg);
+          if (pre) setSelectedFmt(pre);
+          setStage("ready");
+        } catch (err) {
+          setError(err.message || "Error al analizar el video");
+          setStage("error");
+        }
+      };
+
+      const startDownload = () => {
+        if (!selectedFmt) return;
+        setError("");
+        setStage("downloading");
+        setPct(0); setSpeed(""); setEta(""); setTotal(selectedFmt.size || "");
+        setDone(null);
+
+        const params = new URLSearchParams({
+          url: url.trim(),
+          format_id: selectedFmt.format_id,
+          ext: selectedFmt.ext,
+          title: video?.title || "video",
+        });
+        const es = new EventSource(`/download?${params}`);
+        esRef.current = es;
+
+        es.onmessage = e => {
+          let d;
+          try { d = JSON.parse(e.data); } catch { return; }
+          if (d.status === "downloading") {
+            // yt-dlp percent strings may include ANSI codes; strip non-numeric except dot
+            const pctStr = (d.percent || "").replace(/[^\d.]/g, "");
+            const p = parseFloat(pctStr);
+            if (!Number.isNaN(p)) setPct(Math.min(p, 100));
+            if (d.speed) setSpeed(d.speed);
+            if (d.eta) setEta(d.eta);
+            if (d.total) setTotal(d.total.trim());
+          } else if (d.status === "complete") {
+            es.close(); esRef.current = null;
+            setPct(100);
+            setStage("done");
+            const item = {
+              title: video?.title?.slice(0, 80) || "video",
+              quality: selectedFmt.type === "video"
+                ? (selectedFmt.quality || selectedFmt.label)
+                : `audio · ${selectedFmt.sub}`,
+              size: (selectedFmt.size || total || "").replace("~", ""),
+              when: "ahora",
+              download_id: d.download_id,
+              filename: d.filename,
+            };
+            setHistory(h => [item, ...h.filter(x => x.download_id !== d.download_id)].slice(0, 8));
+            setDone({ ...selectedFmt, title: video?.title, download_id: d.download_id, filename: d.filename });
+          } else if (d.status === "error") {
+            es.close(); esRef.current = null;
+            setError(d.message || "Error durante la descarga");
+            setStage("error");
+          }
+        };
+        es.onerror = () => {
+          es.close(); esRef.current = null;
+          if (stage !== "done") {
+            setError("Se perdió la conexión con el servidor");
+            setStage("error");
+          }
+        };
+      };
+
+      const saveFile = (item) => {
+        if (!item?.download_id) return;
+        const a = document.createElement("a");
+        a.href = `/file/${item.download_id}?filename=${encodeURIComponent(item.filename || "video")}`;
+        a.download = item.filename || "video";
+        document.body.appendChild(a); a.click(); a.remove();
+      };
+
+      const onPaste = async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            setUrl(text);
+            setTimeout(analyze, 50);
+          }
+        } catch {}
+      };
+
+      // Cmd/Ctrl+Enter → start download
+      useEffect(() => {
+        const onKey = e => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            if (stage === "ready" && selectedFmt) startDownload();
+          }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+      }, [stage, selectedFmt, url]);
+
+      // Clean up
+      useEffect(() => () => { if (esRef.current) esRef.current.close(); }, []);
+
+      const videoFormats = formats.filter(f => f.type === "video");
+      const audioFormats = formats.filter(f => f.type === "audio");
+      const needsFfmpegBanner = !hasFfmpeg && formats.some(f => f.needsFfmpeg);
+
+      return (
+        <>
+          <TopBar hasFfmpeg={hasFfmpeg} ffmpegChecked={ffmpegChecked}/>
+
+          <main style={{
+            flex: 1, width: "100%", maxWidth: 1180, margin: "0 auto",
+            padding: "44px 28px 80px",
+            display: "grid",
+            gridTemplateColumns: (settings.showHistory || settings.showShortcuts) ? "minmax(0, 1fr) 320px" : "1fr",
+            gap: 24,
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
+
+              {/* Hero (only when idle) */}
+              {stage === "idle" && (
+                <section style={{ animation: "fadeUp .4s ease both" }}>
+                  <div style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "5px 10px 5px 6px", borderRadius: 999,
+                    background: "var(--surface-2)", border: "1px solid var(--border)",
+                    fontSize: 11.5, color: "var(--text-dim)", marginBottom: 18,
+                  }}>
+                    <span style={{
+                      width: 18, height: 18, borderRadius: "50%",
+                      background: "var(--accent-soft)", color: "var(--accent)",
+                      display: "grid", placeItems: "center",
+                    }}><Icon name="sparkle" size={11}/></span>
+                    <span>Para uso personal · sin anuncios · sin tracking</span>
+                  </div>
+                  <h1 style={{
+                    fontSize: 38, lineHeight: 1.05, letterSpacing: "-0.025em",
+                    fontWeight: 600, color: "var(--text)", textWrap: "balance",
+                  }}>
+                    Guarda cualquier video o audio,<br/>
+                    <span style={{
+                      background: "linear-gradient(90deg, var(--accent), var(--accent-2))",
+                      WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                    }}>directo a tu disco.</span>
+                  </h1>
+                  <p style={{ marginTop: 14, fontSize: 15, color: "var(--text-dim)", maxWidth: 540, lineHeight: 1.55 }}>
+                    Pega un enlace, elige el formato y descarga en segundos. Soporta hasta 4K, audio en alta calidad y videos largos.
+                  </p>
+                </section>
+              )}
+
+              {/* URL input */}
+              <section style={{
+                background: "var(--surface)", border: "1px solid var(--border)",
+                borderRadius: 18, padding: 18, boxShadow: "var(--shadow-card)",
+                animation: "fadeUp .45s ease both .05s",
+              }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "4px 4px 4px 14px",
+                  background: "var(--surface-2)", border: "1px solid var(--border)",
+                  borderRadius: 12, transition: "border-color .15s",
+                }}>
+                  <Icon name="link" size={16} style={{ color: "var(--text-muted)", flexShrink: 0 }}/>
+                  <input
+                    value={url}
+                    onChange={e => setUrl(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && analyze()}
+                    placeholder="Pega el enlace de YouTube…  ej. https://youtu.be/…"
+                    style={{
+                      all: "unset", flex: 1, minWidth: 0,
+                      fontSize: 14.5, color: "var(--text)",
+                      padding: "10px 0",
+                      fontFamily: "Geist Mono, monospace",
+                    }}
+                  />
+                  <button onClick={onPaste} style={btnGhostSmall} title="Pegar del portapapeles">
+                    <Icon name="paste" size={13}/>
+                    <span style={{ marginLeft: 2 }}>Pegar</span>
+                  </button>
+                  <button
+                    onClick={analyze}
+                    disabled={stage === "analyzing" || !url.trim()}
+                    style={{ ...btnPrimary, padding: "9px 16px",
+                             opacity: (stage === "analyzing" || !url.trim()) ? 0.5 : 1 }}
+                  >
+                    {stage === "analyzing" ? (
+                      <>
+                        <span style={{
+                          width: 13, height: 13, borderRadius: "50%",
+                          border: "2px solid var(--accent-text)", borderTopColor: "transparent",
+                          animation: "spin .7s linear infinite",
+                        }}/>
+                        Analizando
+                      </>
+                    ) : (
+                      <>Analizar<Icon name="arrow" size={14}/></>
+                    )}
+                  </button>
+                </div>
+
+                {error && (
+                  <div style={{
+                    marginTop: 14, display: "flex", alignItems: "center", gap: 10,
+                    padding: "10px 14px", borderRadius: 10,
+                    background: "oklch(0.70 0.18 25 / 0.10)",
+                    border: "1px solid oklch(0.70 0.18 25 / 0.35)",
+                    color: "var(--danger)", fontSize: 13,
+                  }}>
+                    <Icon name="warn" size={14}/>
+                    {error}
+                  </div>
+                )}
+              </section>
+
+              {/* Analyzing skeleton */}
+              {stage === "analyzing" && (
+                <section style={{
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                  borderRadius: 18, padding: 18,
+                  display: "grid", gridTemplateColumns: "220px 1fr", gap: 18,
+                  boxShadow: "var(--shadow-card)",
+                  animation: "fadeUp .25s ease both",
+                }}>
+                  <div style={{
+                    aspectRatio: "16 / 9", borderRadius: 10,
+                    background: "linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 40%, var(--surface-2) 80%)",
+                    backgroundSize: "200% 100%", animation: "shimmer 1.5s linear infinite",
+                  }}/>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, justifyContent: "center" }}>
+                    {[80, 60, 40].map((w, i) => (
+                      <div key={i} style={{
+                        width: w + "%", height: 12, borderRadius: 6,
+                        background: "linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2))",
+                        backgroundSize: "200% 100%", animation: "shimmer 1.5s linear infinite",
+                      }}/>
+                    ))}
+                    <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", animation: "pulse-dot 1.2s ease-in-out infinite" }}/>
+                      Analizando metadatos…
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* Video info + formats */}
+              {(stage === "ready" || stage === "downloading" || stage === "done") && video && (
+                <section style={{
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                  borderRadius: 18, overflow: "hidden", boxShadow: "var(--shadow-card)",
+                  animation: "fadeUp .35s ease both",
+                }}>
+                  <div style={{
+                    display: "grid", gridTemplateColumns: "220px 1fr", gap: 18,
+                    padding: 18, borderBottom: "1px solid var(--border)",
+                  }}>
+                    <Thumb src={video.thumbnail} duration={video.duration}/>
+                    <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 0 }}>
+                      <div>
+                        <h2 style={{
+                          fontSize: 18, fontWeight: 600, lineHeight: 1.25,
+                          letterSpacing: "-0.01em", color: "var(--text)",
+                          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}>{video.title}</h2>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                          {video.uploader && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{
+                                width: 22, height: 22, borderRadius: "50%",
+                                background: "linear-gradient(135deg, oklch(0.6 0.15 290), oklch(0.5 0.16 200))",
+                                fontSize: 10, fontWeight: 700, color: "white",
+                                display: "grid", placeItems: "center",
+                              }}>{(video.uploader[0] || "?").toUpperCase()}</div>
+                              <span style={{ fontSize: 13, color: "var(--text-dim)", fontWeight: 500 }}>{video.uploader}</span>
+                            </div>
+                          )}
+                          {video.duration && video.duration !== "--" && (
+                            <>
+                              <span style={{ color: "var(--text-muted)", fontSize: 12 }}>·</span>
+                              <span className="mono" style={{ fontSize: 11.5, color: "var(--text-muted)" }}>{video.duration}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                        <button style={btnGhostSmall} onClick={reset}>
+                          <Icon name="close" size={12}/>
+                          {stage === "downloading" ? "Cancelar" : "Otra URL"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {needsFfmpegBanner && (
+                    <div style={{
+                      margin: "18px 18px 0",
+                      display: "flex", alignItems: "flex-start", gap: 10,
+                      padding: "12px 14px", borderRadius: 10,
+                      background: "oklch(0.80 0.13 75 / 0.10)",
+                      border: "1px solid oklch(0.80 0.13 75 / 0.30)",
+                      fontSize: 12.5, color: "var(--warn)",
+                    }}>
+                      <Icon name="warn" size={14} style={{ marginTop: 2, flexShrink: 0 }}/>
+                      <div>
+                        <strong>ffmpeg no detectado.</strong> Los formatos marcados requieren ffmpeg para combinar video y audio. Instálalo con <code style={{ background: "oklch(0 0 0 / 0.2)", padding: "1px 5px", borderRadius: 4 }}>winget install ffmpeg</code> y reinicia el servidor.
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ padding: 18 }}>
+                    {videoFormats.length > 0 && (
+                      <>
+                        <SectionLabel icon="video">Video</SectionLabel>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                          {videoFormats.map(f => (
+                            <FormatCard key={f.id} fmt={f} selected={selectedFmt?.id === f.id}
+                              onSelect={setSelectedFmt} hasFfmpeg={hasFfmpeg} density={settings.density}/>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {audioFormats.length > 0 && (
+                      <>
+                        <div style={{ marginTop: videoFormats.length ? 18 : 0 }}>
+                          <SectionLabel icon="audio">Solo audio</SectionLabel>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                          {audioFormats.map(f => (
+                            <FormatCard key={f.id} fmt={f} selected={selectedFmt?.id === f.id}
+                              onSelect={setSelectedFmt} hasFfmpeg={hasFfmpeg} density={settings.density}/>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {stage === "ready" && selectedFmt && (
+                      <div style={{
+                        marginTop: 22, padding: "14px 16px",
+                        background: "var(--surface-2)", border: "1px solid var(--border)",
+                        borderRadius: 12,
+                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                        flexWrap: "wrap",
+                      }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>Seleccionado</span>
+                          <span style={{ fontSize: 14, fontWeight: 500 }}>
+                            {selectedFmt.label}
+                            {selectedFmt.size && <span className="mono" style={{ marginLeft: 8, fontSize: 12, color: "var(--text-muted)" }}>{selectedFmt.size}</span>}
+                          </span>
+                        </div>
+                        <button onClick={startDownload} style={btnPrimary}>
+                          <Icon name="download" size={15}/>
+                          Descargar ahora
+                        </button>
+                      </div>
+                    )}
+
+                    {stage === "downloading" && (
+                      <div style={{ marginTop: 18 }}>
+                        <ProgressView pct={pct} speed={speed} eta={eta ? `ETA ${eta}` : ""} total={total} fmtName={selectedFmt?.label}/>
+                      </div>
+                    )}
+
+                    {stage === "done" && done && (
+                      <div style={{
+                        marginTop: 18, padding: 22, borderRadius: 14,
+                        background: "linear-gradient(140deg, color-mix(in oklch, var(--accent), transparent 88%), var(--surface-2))",
+                        border: "1px solid color-mix(in oklch, var(--accent), transparent 60%)",
+                        display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 18, alignItems: "center",
+                        animation: "fadeUp .4s ease both",
+                      }}>
+                        <div style={{
+                          width: 48, height: 48, borderRadius: 14,
+                          background: "var(--accent)", color: "var(--accent-text)",
+                          display: "grid", placeItems: "center",
+                          boxShadow: "0 8px 24px -10px var(--accent)",
+                        }}>
+                          <Icon name="check" size={22} style={{ strokeWidth: 3 }}/>
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 15, fontWeight: 600 }}>¡Descarga completada!</div>
+                          <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3,
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {done.filename}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          <button style={btnGhost} onClick={reset}>Otra descarga</button>
+                          <button style={btnPrimary} onClick={() => saveFile(done)}>
+                            <Icon name="download" size={14}/>
+                            Guardar archivo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              <footer style={{
+                marginTop: "auto", paddingTop: 24,
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                color: "var(--text-muted)", fontSize: 11.5,
+                flexWrap: "wrap", gap: 10,
+              }}>
+                <div className="mono" style={{ letterSpacing: "0.04em" }}>vault · uso personal únicamente</div>
+                <div>Respeta los derechos de autor de los creadores</div>
+              </footer>
+            </div>
+
+            {/* Side column */}
+            {(settings.showHistory || settings.showShortcuts) && (
+              <aside style={{ display: "flex", flexDirection: "column", gap: 18, animation: "fadeUp .5s ease both .1s" }}>
+                {settings.showHistory && (
+                  <HistoryCard items={history} onSave={saveFile} onClear={() => setHistory([])}/>
+                )}
+                {settings.showShortcuts && <TipsCard/>}
+              </aside>
+            )}
+          </main>
+
+          {/* Settings */}
+          <button className="settings-fab" onClick={() => setSettingsOpen(o => !o)} title="Ajustes">
+            <Icon name="cog" size={18}/>
+          </button>
+          {settingsOpen && (
+            <SettingsPanel settings={settings} set={setSetting} onClose={() => setSettingsOpen(false)}/>
+          )}
+        </>
+      );
+    };
+
+    const SectionLabel = ({ icon, children }) => (
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        <Icon name={icon} size={13} style={{ color: "var(--text-muted)" }}/>
+        <span style={{
+          fontSize: 11, color: "var(--text-muted)",
+          textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 600,
+        }}>{children}</span>
+        <span style={{ flex: 1, height: 1, background: "var(--border)" }}/>
+      </div>
+    );
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
 </body>
 </html>
