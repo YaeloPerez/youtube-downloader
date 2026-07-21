@@ -97,6 +97,21 @@ def _safe_name(name: str, fallback: str = "video") -> str:
     return cleaned or fallback
 
 
+# YouTube increasingly challenges requests from datacenter IPs with
+# "Sign in to confirm you're not a bot". A cookies.txt from a logged-in
+# session (Netscape format, e.g. via the "Get cookies.txt LOCALLY" browser
+# extension) makes yt-dlp look like a real logged-in browser and avoids it.
+# Optional: the app works without it, just more likely to hit that error.
+COOKIES_FILE = Path("cookies.txt")
+
+
+def _ydl_base_opts() -> dict:
+    opts = {"quiet": True, "no_warnings": True}
+    if COOKIES_FILE.exists():
+        opts["cookiefile"] = str(COOKIES_FILE)
+    return opts
+
+
 def _fmt_size(b):
     if not b:
         return ""
@@ -184,7 +199,7 @@ async def get_video_info(url: str = Query(...)):
     try:
         # extract_flat only skips full extraction for *playlist entries*; a
         # direct video URL still returns full info (formats included).
-        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "extract_flat": "in_playlist"}) as ydl:
+        with yt_dlp.YoutubeDL({**_ydl_base_opts(), "extract_flat": "in_playlist"}) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -258,11 +273,10 @@ async def start_playlist_download(req: PlaylistDownloadRequest):
                 queue.put({**d, "_video_index": idx, "_video_title": title})
 
             opts: dict = {
+                **_ydl_base_opts(),
                 "format": preset["format"],
                 "outtmpl": output_template,
                 "progress_hooks": [progress_hook],
-                "quiet": True,
-                "no_warnings": True,
             }
             if preset["needs_ffmpeg"]:
                 opts["merge_output_format"] = "mp4"
@@ -380,11 +394,10 @@ async def download_video(
 
     def run_download():
         opts: dict = {
+            **_ydl_base_opts(),
             "format": format_id,
             "outtmpl": output_template,
             "progress_hooks": [progress_hook],
-            "quiet": True,
-            "no_warnings": True,
         }
         # Merge to mp4 when combining streams
         if "+" in format_id or "bestvideo" in format_id:
