@@ -434,6 +434,142 @@
       );
     };
 
+    // ── Playlist quality picker ────────────────────────────────────────────
+    const PLAYLIST_QUALITY_OPTIONS = [
+      { id: "best",  label: "Mejor calidad",  sub: "mp4 · video + audio", type: "video", needsFfmpeg: true },
+      { id: "1080p", label: "Hasta 1080p",    sub: "mp4",                 type: "video", needsFfmpeg: true },
+      { id: "720p",  label: "Hasta 720p",     sub: "mp4",                 type: "video", needsFfmpeg: true },
+      { id: "audio", label: "Solo audio",     sub: "m4a",                 type: "audio", needsFfmpeg: false },
+    ];
+
+    const PlaylistQualityPicker = ({ value, onChange, hasFfmpeg }) => (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        {PLAYLIST_QUALITY_OPTIONS.map(opt => {
+          const disabled = opt.needsFfmpeg && !hasFfmpeg;
+          const selected = value === opt.id;
+          const isVideo = opt.type === "video";
+          return (
+            <button
+              key={opt.id}
+              onClick={() => !disabled && onChange(opt.id)}
+              disabled={disabled}
+              title={disabled ? "Requiere ffmpeg" : undefined}
+              style={{
+                all: "unset",
+                display: "grid", gridTemplateColumns: "auto 1fr auto",
+                alignItems: "center", gap: 12,
+                cursor: disabled ? "not-allowed" : "pointer",
+                padding: "12px 14px", borderRadius: 12,
+                background: selected ? "var(--accent-soft)" : "var(--surface-2)",
+                border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+                boxShadow: selected ? "0 0 0 3px var(--accent-soft)" : "none",
+                transition: "all .15s ease",
+                opacity: disabled ? 0.45 : 1,
+              }}
+            >
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                display: "grid", placeItems: "center",
+                background: isVideo ? "oklch(0.78 0.13 240 / 0.14)" : "oklch(0.82 0.15 155 / 0.14)",
+                color: isVideo ? "var(--video-tag)" : "var(--audio-tag)",
+                border: `1px solid ${isVideo ? "oklch(0.78 0.13 240 / 0.3)" : "oklch(0.82 0.15 155 / 0.3)"}`,
+              }}>
+                <Icon name={isVideo ? "video" : "audio"} size={15}/>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                <span style={{ fontWeight: 500, fontSize: 13.5, color: "var(--text)" }}>{opt.label}</span>
+                <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>{opt.sub}</span>
+              </div>
+              <div style={{
+                width: 16, height: 16, borderRadius: "50%",
+                border: `1.5px solid ${selected ? "var(--accent)" : "var(--border-strong)"}`,
+                display: "grid", placeItems: "center",
+                background: selected ? "var(--accent)" : "transparent",
+              }}>
+                {selected && <Icon name="check" size={10} style={{ color: "var(--accent-text)", strokeWidth: 3 }}/>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+
+    // ── Playlist entry row ─────────────────────────────────────────────────
+    const PlaylistEntryRow = ({ entry, checked, onToggle }) => (
+      <button
+        onClick={() => onToggle(entry.index)}
+        style={{
+          all: "unset", cursor: "pointer",
+          display: "grid", gridTemplateColumns: "auto auto 1fr auto", alignItems: "center", gap: 10,
+          padding: "8px 10px", borderRadius: 10,
+          transition: "background .15s",
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = "var(--surface-2)"}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+      >
+        <div style={{
+          width: 16, height: 16, borderRadius: 5,
+          border: `1.5px solid ${checked ? "var(--accent)" : "var(--border-strong)"}`,
+          background: checked ? "var(--accent)" : "transparent",
+          display: "grid", placeItems: "center", flexShrink: 0,
+        }}>
+          {checked && <Icon name="check" size={10} style={{ color: "var(--accent-text)", strokeWidth: 3 }}/>}
+        </div>
+        <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)", width: 22, textAlign: "right", flexShrink: 0 }}>{entry.index}</span>
+        <span style={{
+          fontSize: 13, color: "var(--text)", textAlign: "left",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
+        }}>{entry.title}</span>
+        {entry.duration && entry.duration !== "--" && (
+          <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>{entry.duration}</span>
+        )}
+      </button>
+    );
+
+    // ── Playlist progress view ─────────────────────────────────────────────
+    const PlaylistProgressView = ({ completed, total, currentIndex, currentTitle, pct, speed, eta }) => (
+      <div style={{
+        padding: 20, borderRadius: 14,
+        background: "var(--surface-2)", border: "1px solid var(--border)",
+        display: "flex", flexDirection: "column", gap: 16,
+      }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", animation: "pulse-dot 1.2s ease-in-out infinite" }}/>
+              <span style={{ fontSize: 13, color: "var(--text-dim)", fontWeight: 500 }}>Descargando playlist</span>
+            </div>
+            <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>{completed} / {total}</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 999, overflow: "hidden", background: "var(--surface-3)" }}>
+            <div style={{
+              height: "100%", width: `${total ? (completed / total) * 100 : 0}%`,
+              background: "linear-gradient(90deg, var(--accent), var(--accent-2))",
+              borderRadius: 999, transition: "width .3s ease",
+            }}/>
+          </div>
+        </div>
+        {currentTitle && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="mono" style={{
+              fontSize: 12, color: "var(--text-dim)",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>#{currentIndex} · {currentTitle}</div>
+            <div style={{ height: 5, borderRadius: 999, overflow: "hidden", background: "var(--surface-3)" }}>
+              <div style={{
+                height: "100%", width: `${pct}%`,
+                background: "var(--accent-2)", borderRadius: 999, transition: "width .3s ease",
+              }}/>
+            </div>
+            <div style={{ display: "flex", gap: 18 }}>
+              <Stat label="velocidad" value={speed}/>
+              <Stat label="restante" value={eta ? `ETA ${eta}` : ""}/>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+
     const Stat = ({ label, value }) => (
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <span className="mono" style={{ fontSize: 9.5, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</span>
@@ -658,6 +794,21 @@
       const [settingsOpen, setSettingsOpen] = useState(false);
       const esRef = useRef(null);
 
+      // Playlist state
+      const [playlist, setPlaylist] = useState(null);
+      const [selectedEntries, setSelectedEntries] = useState(new Set());
+      const [playlistQuality, setPlaylistQuality] = useState("best");
+      const [plCompleted, setPlCompleted] = useState(0);
+      const [plTotal, setPlTotal] = useState(0);
+      const [plCurrentIndex, setPlCurrentIndex] = useState(null);
+      const [plCurrentTitle, setPlCurrentTitle] = useState("");
+      const [plPct, setPlPct] = useState(0);
+      const [plSpeed, setPlSpeed] = useState("");
+      const [plEta, setPlEta] = useState("");
+      const [plPlaylistName, setPlPlaylistName] = useState("");
+      const [plZipId, setPlZipId] = useState(null);
+      const [plErrors, setPlErrors] = useState([]);
+
       // Persist settings + history
       useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch {} }, [settings]);
       useEffect(() => { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch {} }, [history]);
@@ -686,6 +837,9 @@
         setStage("idle"); setVideo(null); setFormats([]);
         setSelectedFmt(null); setError(""); setPct(0); setDone(null);
         setSpeed(""); setEta(""); setTotal("");
+        setPlaylist(null); setSelectedEntries(new Set());
+        setPlCompleted(0); setPlTotal(0); setPlCurrentIndex(null); setPlCurrentTitle("");
+        setPlPct(0); setPlSpeed(""); setPlEta(""); setPlPlaylistName(""); setPlZipId(null); setPlErrors([]);
         if (esRef.current) { esRef.current.close(); esRef.current = null; }
       };
 
@@ -694,11 +848,25 @@
         if (!u) return;
         setStage("analyzing");
         setError(""); setSelectedFmt(null); setDone(null);
-        setVideo(null); setFormats([]);
+        setVideo(null); setFormats([]); setPlaylist(null);
         try {
           const res = await fetch(`/info?url=${encodeURIComponent(u)}`);
           const data = await res.json();
           if (!res.ok) throw new Error(data.detail || "Error al analizar el video");
+
+          if (data.type === "playlist") {
+            setPlaylist({
+              title: data.title,
+              uploader: data.uploader,
+              video_count: data.video_count,
+              entries: data.entries,
+            });
+            setSelectedEntries(new Set(data.entries.map(e => e.index)));
+            setPlaylistQuality("best");
+            setStage("playlist_ready");
+            return;
+          }
+
           setVideo({
             title: data.title,
             uploader: data.uploader,
@@ -715,6 +883,82 @@
           setStage("ready");
         } catch (err) {
           setError(err.message || "Error al analizar el video");
+          setStage("error");
+        }
+      };
+
+      const toggleEntry = (idx) => {
+        setSelectedEntries(s => {
+          const n = new Set(s);
+          if (n.has(idx)) n.delete(idx); else n.add(idx);
+          return n;
+        });
+      };
+
+      const toggleAllEntries = () => {
+        if (!playlist) return;
+        setSelectedEntries(s => s.size === playlist.entries.length
+          ? new Set()
+          : new Set(playlist.entries.map(e => e.index)));
+      };
+
+      const startPlaylistDownload = async () => {
+        if (!playlist) return;
+        const chosen = playlist.entries.filter(e => selectedEntries.has(e.index));
+        if (!chosen.length) return;
+
+        setError("");
+        setStage("playlist_downloading");
+        setPlCompleted(0); setPlTotal(chosen.length);
+        setPlCurrentIndex(null); setPlCurrentTitle("");
+        setPlPct(0); setPlSpeed(""); setPlEta("");
+        setPlPlaylistName(""); setPlZipId(null); setPlErrors([]);
+
+        try {
+          const res = await fetch("/playlist/download", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              quality: playlistQuality,
+              entries: chosen.map(e => ({ index: e.index, url: e.url, title: e.title })),
+              playlist_title: playlist.title,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Error al iniciar la descarga");
+
+          const es = new EventSource(`/playlist/progress/${data.job_id}`);
+          esRef.current = es;
+
+          es.onmessage = e => {
+            let d;
+            try { d = JSON.parse(e.data); } catch { return; }
+            if (d.status === "downloading") {
+              setPlCurrentIndex(d.video_index);
+              setPlCurrentTitle(d.video_title || "");
+              const p = parseFloat((d.percent || "").replace(/[^\d.]/g, ""));
+              if (!Number.isNaN(p)) setPlPct(Math.min(p, 100));
+              if (d.speed) setPlSpeed(d.speed);
+              if (d.eta) setPlEta(d.eta);
+            } else if (d.status === "video_complete") {
+              setPlCompleted(d.completed || 0);
+              setPlPct(0); setPlSpeed(""); setPlEta("");
+            } else if (d.status === "video_error") {
+              setPlErrors(errs => [...errs, { index: d.video_index, title: d.video_title, message: d.message }]);
+            } else if (d.status === "all_complete") {
+              es.close(); esRef.current = null;
+              setPlPlaylistName(d.playlist_name || playlist?.title || "playlist");
+              setPlZipId(d.zip_id);
+              setStage("playlist_done");
+            }
+          };
+          es.onerror = () => {
+            es.close(); esRef.current = null;
+            setError("Se perdió la conexión con el servidor");
+            setStage("error");
+          };
+        } catch (err) {
+          setError(err.message || "Error al iniciar la descarga");
           setStage("error");
         }
       };
@@ -800,11 +1044,12 @@
         const onKey = e => {
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
             if (stage === "ready" && selectedFmt) startDownload();
+            if (stage === "playlist_ready" && selectedEntries.size) startPlaylistDownload();
           }
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-      }, [stage, selectedFmt, url]);
+      }, [stage, selectedFmt, url, selectedEntries]);
 
       // Clean up
       useEffect(() => () => { if (esRef.current) esRef.current.close(); }, []);
@@ -854,7 +1099,7 @@
                     }}>directo a tu disco.</span>
                   </h1>
                   <p style={{ marginTop: 14, fontSize: 15, color: "var(--text-dim)", maxWidth: 540, lineHeight: 1.55 }}>
-                    Pega un enlace, elige el formato y descarga en segundos. Soporta hasta 4K, audio en alta calidad y videos largos.
+                    Pega un enlace, elige el formato y descarga en segundos. Soporta hasta 4K, audio en alta calidad, videos largos y playlists completas organizadas en carpetas.
                   </p>
                 </section>
               )}
@@ -876,7 +1121,7 @@
                     value={url}
                     onChange={e => setUrl(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && analyze()}
-                    placeholder="Pega el enlace de YouTube…  ej. https://youtu.be/…"
+                    placeholder="Pega el enlace de YouTube (video o playlist)…"
                     style={{
                       all: "unset", flex: 1, minWidth: 0,
                       fontSize: 14.5, color: "var(--text)",
@@ -1103,6 +1348,150 @@
                             Guardar archivo
                           </button>
                         </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Playlist */}
+              {(stage === "playlist_ready" || stage === "playlist_downloading" || stage === "playlist_done") && playlist && (
+                <section style={{
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                  borderRadius: 18, overflow: "hidden", boxShadow: "var(--shadow-card)",
+                  animation: "fadeUp .35s ease both",
+                }}>
+                  <div style={{
+                    display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
+                    padding: 18, borderBottom: "1px solid var(--border)",
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <Icon name="folder" size={14} style={{ color: "var(--accent)" }}/>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>Playlist</span>
+                      </div>
+                      <h2 style={{
+                        fontSize: 18, fontWeight: 600, lineHeight: 1.25,
+                        letterSpacing: "-0.01em", color: "var(--text)",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{playlist.title}</h2>
+                      <div style={{ marginTop: 6, fontSize: 12.5, color: "var(--text-dim)" }}>
+                        {playlist.uploader ? `${playlist.uploader} · ` : ""}{playlist.video_count} videos
+                      </div>
+                    </div>
+                    <button style={btnGhostSmall} onClick={reset}>
+                      <Icon name="close" size={12}/>
+                      {stage === "playlist_downloading" ? "Cancelar" : "Otra URL"}
+                    </button>
+                  </div>
+
+                  <div style={{ padding: 18 }}>
+                    {stage === "playlist_ready" && (
+                      <>
+                        <SectionLabel icon="cog">Calidad</SectionLabel>
+                        <div style={{ marginTop: 10 }}>
+                          <PlaylistQualityPicker value={playlistQuality} onChange={setPlaylistQuality} hasFfmpeg={hasFfmpeg}/>
+                        </div>
+
+                        <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <SectionLabel icon="video">Videos</SectionLabel>
+                          <button onClick={toggleAllEntries} style={{ ...btnGhostSmall, marginLeft: 10, flexShrink: 0 }}>
+                            {selectedEntries.size === playlist.entries.length ? "Ninguno" : "Todos"}
+                          </button>
+                        </div>
+                        <div style={{
+                          marginTop: 10, maxHeight: 320, overflowY: "auto",
+                          display: "flex", flexDirection: "column", gap: 2,
+                          border: "1px solid var(--border)", borderRadius: 12, padding: 6,
+                        }}>
+                          {playlist.entries.map(entry => (
+                            <PlaylistEntryRow key={entry.index} entry={entry}
+                              checked={selectedEntries.has(entry.index)} onToggle={toggleEntry}/>
+                          ))}
+                        </div>
+
+                        <div style={{
+                          marginTop: 18, padding: "14px 16px",
+                          background: "var(--surface-2)", border: "1px solid var(--border)",
+                          borderRadius: 12,
+                          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                          flexWrap: "wrap",
+                        }}>
+                          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                            <strong style={{ color: "var(--text)" }}>{selectedEntries.size}</strong> de {playlist.entries.length} seleccionados
+                          </span>
+                          <button onClick={startPlaylistDownload} disabled={!selectedEntries.size} style={{ ...btnPrimary, opacity: selectedEntries.size ? 1 : 0.5 }}>
+                            <Icon name="download" size={15}/>
+                            Descargar seleccionados
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {stage === "playlist_downloading" && (
+                      <PlaylistProgressView
+                        completed={plCompleted} total={plTotal}
+                        currentIndex={plCurrentIndex} currentTitle={plCurrentTitle}
+                        pct={plPct} speed={plSpeed} eta={plEta}/>
+                    )}
+
+                    {stage === "playlist_done" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                        <div style={{
+                          padding: 22, borderRadius: 14,
+                          background: "linear-gradient(140deg, color-mix(in oklch, var(--accent), transparent 88%), var(--surface-2))",
+                          border: "1px solid color-mix(in oklch, var(--accent), transparent 60%)",
+                          display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 18, alignItems: "center",
+                          animation: "fadeUp .4s ease both",
+                        }}>
+                          <div style={{
+                            width: 48, height: 48, borderRadius: 14,
+                            background: "var(--accent)", color: "var(--accent-text)",
+                            display: "grid", placeItems: "center",
+                            boxShadow: "0 8px 24px -10px var(--accent)",
+                          }}>
+                            <Icon name="check" size={22} style={{ strokeWidth: 3 }}/>
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 15, fontWeight: 600 }}>
+                              {plCompleted} de {plTotal} videos descargados
+                            </div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3,
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {plPlaylistName}.zip
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            <button style={btnGhost} onClick={reset}>Otra descarga</button>
+                            {plZipId && (
+                              <button style={btnPrimary} onClick={() => saveFile({ download_id: plZipId, filename: `${plPlaylistName}.zip` })}>
+                                <Icon name="download" size={14}/>
+                                Descargar ZIP
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {plErrors.length > 0 && (
+                          <div style={{
+                            padding: "12px 14px", borderRadius: 10,
+                            background: "oklch(0.70 0.18 25 / 0.10)",
+                            border: "1px solid oklch(0.70 0.18 25 / 0.35)",
+                            color: "var(--danger)", fontSize: 12.5,
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, fontWeight: 600 }}>
+                              <Icon name="warn" size={14}/>
+                              {plErrors.length} video{plErrors.length > 1 ? "s" : ""} con error
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                              {plErrors.map((e, i) => (
+                                <div key={i} className="mono" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  #{e.index} {e.title} — {e.message}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
