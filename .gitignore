@@ -10,3 +10,11 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# Android (android/) — machine-specific / generated, not the source of truth
+android/local.properties
+android/.gradle/
+android/.kotlin/
+android/app/src/main/assets/index.html
+*.iml
+.idea/

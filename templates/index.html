@@ -10,6 +10,10 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
+    /* Android WebView (Chromium's "font boosting") can inflate text sizes
+       unpredictably regardless of the viewport meta tag above — this is the
+       standard cross-browser way to opt out. No effect on desktop browsers. */
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     body {
       font-family: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
       font-feature-settings: "ss01", "cv11";
@@ -93,7 +97,7 @@
 
     /* Lightweight settings panel (replaces full TweaksPanel for the integrated build) */
     .settings-fab {
-      position: fixed; right: 18px; bottom: 18px;
+      position: fixed; right: 18px; bottom: calc(18px + var(--android-nav-bar-height, 0px));
       width: 42px; height: 42px; border-radius: 50%;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -168,6 +172,76 @@
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react">
+    // ── Android WebView bridge shim ──────────────────────────────────────────
+    // Inert when window.AndroidBridge doesn't exist (i.e. on the real web
+    // app) — safe to keep permanently in this single shared file. Redirects
+    // fetch()/EventSource/navigator.clipboard calls to the native Kotlin
+    // bridge instead of a real HTTP server, so the rest of this file (the
+    // React app below) needs zero further changes to run inside the Android
+    // app. See /android/README.md.
+    if (window.AndroidBridge) {
+      const makeChannel = () => {
+        const listeners = []; const buffer = [];
+        return {
+          emit(data) { if (listeners.length) listeners.forEach(fn => fn(data)); else buffer.push(data); },
+          subscribe(fn) { listeners.push(fn); while (buffer.length) fn(buffer.shift()); },
+        };
+      };
+      const downloadChannel = makeChannel();
+      const playlistChannel = makeChannel();
+      const analyzeResolvers = [];
+
+      window.__onAnalyze = (json) => { const resolve = analyzeResolvers.shift(); if (resolve) resolve(json); };
+      window.__onDownloadEvent = (json) => downloadChannel.emit(json);
+      window.__onPlaylistEvent = (json) => playlistChannel.emit(json);
+
+      const realFetch = window.fetch.bind(window);
+      window.fetch = (url, opts) => {
+        if (typeof url === "string" && url === "/check") {
+          return Promise.resolve({ ok: true, json: async () => ({ ffmpeg: true }) });
+        }
+        if (typeof url === "string" && url.startsWith("/info?url=")) {
+          const target = decodeURIComponent(url.slice("/info?url=".length));
+          return new Promise((resolve) => {
+            analyzeResolvers.push((json) => {
+              const parsed = JSON.parse(json);
+              resolve({ ok: !parsed.detail, json: async () => parsed });
+            });
+            window.AndroidBridge.analyze(target);
+          });
+        }
+        if (typeof url === "string" && url === "/playlist/download" && opts && opts.method === "POST") {
+          const body = JSON.parse(opts.body);
+          window.AndroidBridge.startPlaylistDownload(body.quality, JSON.stringify(body.entries), body.playlist_title);
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ job_id: "local", folder: body.playlist_title, total: body.entries.length }),
+          });
+        }
+        return realFetch(url, opts);
+      };
+
+      window.EventSource = class {
+        constructor(url) {
+          this.onmessage = null;
+          this.onerror = null;
+          this._closed = false;
+          if (url.startsWith("/download?")) {
+            const params = new URLSearchParams(url.split("?")[1]);
+            downloadChannel.subscribe((json) => { if (!this._closed && this.onmessage) this.onmessage({ data: json }); });
+            window.AndroidBridge.startDownload(
+              params.get("url"), params.get("format_id"), params.get("ext"), params.get("title"),
+            );
+          } else if (url.startsWith("/playlist/progress/")) {
+            playlistChannel.subscribe((json) => { if (!this._closed && this.onmessage) this.onmessage({ data: json }); });
+          }
+        }
+        close() { this._closed = true; }
+      };
+
+      navigator.clipboard = { readText: () => Promise.resolve(window.AndroidBridge.readClipboard()) };
+    }
+
     const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
     // ── Accent palettes ─────────────────────────────────────────────────────
@@ -195,6 +269,7 @@
         history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 8v4l3 2"/></>,
         folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>,
         paste: <><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M9 4h6v2H9z"/></>,
+        search: <><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></>,
         arrow: <><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></>,
         warn: <><path d="M12 3 2 20h20L12 3z"/><path d="M12 9v5"/><circle cx="12" cy="17.5" r=".8" fill="currentColor" stroke="none"/></>,
         bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" stroke="none"/>,
@@ -690,7 +765,8 @@
     const TopBar = ({ hasFfmpeg, ffmpegChecked }) => (
       <header style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "16px 28px",
+        paddingTop: "calc(16px + var(--android-status-bar-height, 0px))",
+        paddingBottom: 16, paddingLeft: 28, paddingRight: 28,
         borderBottom: "1px solid var(--border)",
         background: "color-mix(in oklch, var(--bg), transparent 30%)",
         backdropFilter: "blur(12px)",
@@ -748,10 +824,12 @@
             <span>Mostrar historial</span>
             <div className={"toggle " + (settings.showHistory ? "on" : "")} onClick={() => set("showHistory", !settings.showHistory)}/>
           </div>
-          <div className="settings-row">
-            <span>Mostrar atajos</span>
-            <div className={"toggle " + (settings.showShortcuts ? "on" : "")} onClick={() => set("showShortcuts", !settings.showShortcuts)}/>
-          </div>
+          {!window.AndroidBridge && (
+            <div className="settings-row">
+              <span>Mostrar atajos</span>
+              <div className={"toggle " + (settings.showShortcuts ? "on" : "")} onClick={() => set("showShortcuts", !settings.showShortcuts)}/>
+            </div>
+          )}
         </div>
       </>
     );
@@ -775,8 +853,28 @@
       } catch { return []; }
     };
 
+    // The aside column is a fixed 320px — below this width there isn't
+    // enough room left for the main column next to it (this is what broke
+    // inside the Android WebView, whose viewport is phone-narrow, not a
+    // WebView-specific bug: the same thing happens in any narrow browser).
+    const NARROW_BREAKPOINT = 860;
+    const useIsNarrow = () => {
+      const [isNarrow, setIsNarrow] = useState(
+        typeof window !== "undefined" && window.innerWidth < NARROW_BREAKPOINT,
+      );
+      useEffect(() => {
+        const onResize = () => setIsNarrow(window.innerWidth < NARROW_BREAKPOINT);
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+      }, []);
+      return isNarrow;
+    };
+
     const App = () => {
+      const isNarrow = useIsNarrow();
       const [settings, setSettings] = useState(loadSettings);
+      // Keyboard shortcuts don't apply on a touchscreen — never shown in the Android app.
+      const showShortcuts = settings.showShortcuts && !window.AndroidBridge;
       const [url, setUrl] = useState("");
       const [stage, setStage] = useState("idle"); // idle | analyzing | ready | downloading | done | error
       const [video, setVideo] = useState(null);
@@ -875,9 +973,12 @@
           });
           const parsed = data.formats.map(parseFormat);
           setFormats(parsed);
-          // Pre-select first non-disabled, recommended video
-          const pre = parsed.find(f => f.recommended && f.type === "video" && (!f.needsFfmpeg || hasFfmpeg))
-                  || parsed.find(f => f.type === "video" && (!f.needsFfmpeg || hasFfmpeg))
+          // Pre-select first non-disabled, recommended format — audio by
+          // default on Android (matches the audio-first section ordering),
+          // video by default on the web app.
+          const preferredType = window.AndroidBridge ? "audio" : "video";
+          const pre = parsed.find(f => f.recommended && f.type === preferredType && (!f.needsFfmpeg || hasFfmpeg))
+                  || parsed.find(f => f.type === preferredType && (!f.needsFfmpeg || hasFfmpeg))
                   || parsed.find(f => !f.needsFfmpeg || hasFfmpeg);
           if (pre) setSelectedFmt(pre);
           setStage("ready");
@@ -1023,6 +1124,12 @@
 
       const saveFile = (item) => {
         if (!item?.download_id) return;
+        if (window.AndroidBridge) {
+          // download_id is already the saved file's content:// Uri on Android
+          // (the file is already sitting in Downloads/ — this just opens it).
+          window.AndroidBridge.openFile(item.download_id);
+          return;
+        }
         const a = document.createElement("a");
         a.href = `/file/${item.download_id}?filename=${encodeURIComponent(item.filename || "video")}`;
         a.download = item.filename || "video";
@@ -1066,7 +1173,7 @@
             flex: 1, width: "100%", maxWidth: 1180, margin: "0 auto",
             padding: "44px 28px 80px",
             display: "grid",
-            gridTemplateColumns: (settings.showHistory || settings.showShortcuts) ? "minmax(0, 1fr) 320px" : "1fr",
+            gridTemplateColumns: (!isNarrow && (settings.showHistory || showShortcuts)) ? "minmax(0, 1fr) 320px" : "1fr",
             gap: 24,
           }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
@@ -1096,7 +1203,7 @@
                       background: "linear-gradient(90deg, var(--accent), var(--accent-2))",
                       WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
                       backgroundClip: "text",
-                    }}>directo a tu disco.</span>
+                    }}>directo a tu dispositivo.</span>
                   </h1>
                   <p style={{ marginTop: 14, fontSize: 15, color: "var(--text-dim)", maxWidth: 540, lineHeight: 1.55 }}>
                     Pega un enlace, elige el formato y descarga en segundos. Soporta hasta 4K, audio en alta calidad, videos largos y playlists completas organizadas en carpetas.
@@ -1129,25 +1236,44 @@
                       fontFamily: "Geist Mono, monospace",
                     }}
                   />
-                  <button onClick={onPaste} style={btnGhostSmall} title="Pegar del portapapeles">
-                    <Icon name="paste" size={13}/>
-                    <span style={{ marginLeft: 2 }}>Pegar</span>
-                  </button>
+                  {!window.AndroidBridge && (
+                    <button onClick={onPaste} style={btnGhostSmall} title="Pegar del portapapeles">
+                      <Icon name="paste" size={13}/>
+                      <span style={{ marginLeft: 2 }}>Pegar</span>
+                    </button>
+                  )}
                   <button
                     onClick={analyze}
                     disabled={stage === "analyzing" || !url.trim()}
-                    style={{ ...btnPrimary, padding: "9px 16px",
-                             opacity: (stage === "analyzing" || !url.trim()) ? 0.5 : 1 }}
+                    title="Analizar"
+                    style={window.AndroidBridge ? {
+                      ...btnPrimary, padding: 0, width: 38, height: 38,
+                      display: "grid", placeItems: "center",
+                      opacity: (stage === "analyzing" || !url.trim()) ? 0.5 : 1,
+                    } : {
+                      ...btnPrimary, padding: "9px 16px",
+                      opacity: (stage === "analyzing" || !url.trim()) ? 0.5 : 1,
+                    }}
                   >
                     {stage === "analyzing" ? (
-                      <>
+                      window.AndroidBridge ? (
                         <span style={{
-                          width: 13, height: 13, borderRadius: "50%",
+                          width: 15, height: 15, borderRadius: "50%",
                           border: "2px solid var(--accent-text)", borderTopColor: "transparent",
                           animation: "spin .7s linear infinite",
                         }}/>
-                        Analizando
-                      </>
+                      ) : (
+                        <>
+                          <span style={{
+                            width: 13, height: 13, borderRadius: "50%",
+                            border: "2px solid var(--accent-text)", borderTopColor: "transparent",
+                            animation: "spin .7s linear infinite",
+                          }}/>
+                          Analizando
+                        </>
+                      )
+                    ) : window.AndroidBridge ? (
+                      <Icon name="search" size={17}/>
                     ) : (
                       <>Analizar<Icon name="arrow" size={14}/></>
                     )}
@@ -1173,7 +1299,7 @@
                 <section style={{
                   background: "var(--surface)", border: "1px solid var(--border)",
                   borderRadius: 18, padding: 18,
-                  display: "grid", gridTemplateColumns: "220px 1fr", gap: 18,
+                  display: "grid", gridTemplateColumns: isNarrow ? "88px 1fr" : "220px 1fr", gap: 18,
                   boxShadow: "var(--shadow-card)",
                   animation: "fadeUp .25s ease both",
                 }}>
@@ -1206,7 +1332,7 @@
                   animation: "fadeUp .35s ease both",
                 }}>
                   <div style={{
-                    display: "grid", gridTemplateColumns: "220px 1fr", gap: 18,
+                    display: "grid", gridTemplateColumns: isNarrow ? "88px 1fr" : "220px 1fr", gap: 18,
                     padding: 18, borderBottom: "1px solid var(--border)",
                   }}>
                     <Thumb src={video.thumbnail} duration={video.duration}/>
@@ -1264,31 +1390,40 @@
                   )}
 
                   <div style={{ padding: 18 }}>
-                    {videoFormats.length > 0 && (
-                      <>
-                        <SectionLabel icon="video">Video</SectionLabel>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
-                          {videoFormats.map(f => (
-                            <FormatCard key={f.id} fmt={f} selected={selectedFmt?.id === f.id}
-                              onSelect={setSelectedFmt} hasFfmpeg={hasFfmpeg} density={settings.density}/>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                    {audioFormats.length > 0 && (
-                      <>
-                        <div style={{ marginTop: videoFormats.length ? 18 : 0 }}>
+                    {(() => {
+                      const videoSection = videoFormats.length > 0 && (
+                        <>
+                          <SectionLabel icon="video">Video</SectionLabel>
+                          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 8, marginTop: 10 }}>
+                            {videoFormats.map(f => (
+                              <FormatCard key={f.id} fmt={f} selected={selectedFmt?.id === f.id}
+                                onSelect={setSelectedFmt} hasFfmpeg={hasFfmpeg} density={settings.density}/>
+                            ))}
+                          </div>
+                        </>
+                      );
+                      const audioSection = audioFormats.length > 0 && (
+                        <>
                           <SectionLabel icon="audio">Solo audio</SectionLabel>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
-                          {audioFormats.map(f => (
-                            <FormatCard key={f.id} fmt={f} selected={selectedFmt?.id === f.id}
-                              onSelect={setSelectedFmt} hasFfmpeg={hasFfmpeg} density={settings.density}/>
-                          ))}
-                        </div>
-                      </>
-                    )}
+                          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 8, marginTop: 10 }}>
+                            {audioFormats.map(f => (
+                              <FormatCard key={f.id} fmt={f} selected={selectedFmt?.id === f.id}
+                                onSelect={setSelectedFmt} hasFfmpeg={hasFfmpeg} density={settings.density}/>
+                            ))}
+                          </div>
+                        </>
+                      );
+                      // Android's default quality preset is audio (its
+                      // format list is also curated to just m4a/mp4 in
+                      // YoutubeDlBridge.kt) — lead with audio there.
+                      const [first, second] = window.AndroidBridge ? [audioSection, videoSection] : [videoSection, audioSection];
+                      return (
+                        <>
+                          {first}
+                          {second && <div style={{ marginTop: first ? 18 : 0 }}>{second}</div>}
+                        </>
+                      );
+                    })()}
 
                     {stage === "ready" && selectedFmt && (
                       <div style={{
@@ -1323,7 +1458,10 @@
                         marginTop: 18, padding: 22, borderRadius: 14,
                         background: "linear-gradient(140deg, color-mix(in oklch, var(--accent), transparent 88%), var(--surface-2))",
                         border: "1px solid color-mix(in oklch, var(--accent), transparent 60%)",
-                        display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 18, alignItems: "center",
+                        display: isNarrow ? "flex" : "grid",
+                        flexDirection: isNarrow ? "column" : undefined,
+                        gridTemplateColumns: isNarrow ? undefined : "auto 1fr auto",
+                        gap: 18, alignItems: isNarrow ? "stretch" : "center",
                         animation: "fadeUp .4s ease both",
                       }}>
                         <div style={{
@@ -1338,15 +1476,22 @@
                           <div style={{ fontSize: 15, fontWeight: 600 }}>¡Descarga completada!</div>
                           <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3,
                               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {done.filename}
+                            {window.AndroidBridge ? `Descargas/${done.filename}` : done.filename}
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: isNarrow ? "flex-start" : "flex-end" }}>
                           <button style={btnGhost} onClick={reset}>Otra descarga</button>
-                          <button style={btnPrimary} onClick={() => saveFile(done)}>
-                            <Icon name="download" size={14}/>
-                            Guardar archivo
-                          </button>
+                          {window.AndroidBridge ? (
+                            <button style={btnPrimary} onClick={() => window.AndroidBridge.openDownloadsApp()}>
+                              <Icon name="folder" size={14}/>
+                              Abrir Descargas
+                            </button>
+                          ) : (
+                            <button style={btnPrimary} onClick={() => saveFile(done)}>
+                              <Icon name="download" size={14}/>
+                              Guardar archivo
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1441,7 +1586,10 @@
                           padding: 22, borderRadius: 14,
                           background: "linear-gradient(140deg, color-mix(in oklch, var(--accent), transparent 88%), var(--surface-2))",
                           border: "1px solid color-mix(in oklch, var(--accent), transparent 60%)",
-                          display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 18, alignItems: "center",
+                          display: isNarrow ? "flex" : "grid",
+                          flexDirection: isNarrow ? "column" : undefined,
+                          gridTemplateColumns: isNarrow ? undefined : "auto 1fr auto",
+                          gap: 18, alignItems: isNarrow ? "stretch" : "center",
                           animation: "fadeUp .4s ease both",
                         }}>
                           <div style={{
@@ -1458,12 +1606,17 @@
                             </div>
                             <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3,
                                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {plPlaylistName}.zip
+                              {window.AndroidBridge ? `Descargas/${plPlaylistName}` : `${plPlaylistName}.zip`}
                             </div>
                           </div>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: isNarrow ? "flex-start" : "flex-end" }}>
                             <button style={btnGhost} onClick={reset}>Otra descarga</button>
-                            {plZipId && (
+                            {window.AndroidBridge ? (
+                              <button style={btnPrimary} onClick={() => window.AndroidBridge.openDownloadsApp()}>
+                                <Icon name="folder" size={14}/>
+                                Abrir Descargas
+                              </button>
+                            ) : plZipId && (
                               <button style={btnPrimary} onClick={() => saveFile({ download_id: plZipId, filename: `${plPlaylistName}.zip` })}>
                                 <Icon name="download" size={14}/>
                                 Descargar ZIP
@@ -1509,12 +1662,12 @@
             </div>
 
             {/* Side column */}
-            {(settings.showHistory || settings.showShortcuts) && (
+            {(settings.showHistory || showShortcuts) && (
               <aside style={{ display: "flex", flexDirection: "column", gap: 18, animation: "fadeUp .5s ease both .1s" }}>
                 {settings.showHistory && (
                   <HistoryCard items={history} onSave={saveFile} onClear={() => setHistory([])}/>
                 )}
-                {settings.showShortcuts && <TipsCard/>}
+                {showShortcuts && <TipsCard/>}
               </aside>
             )}
           </main>

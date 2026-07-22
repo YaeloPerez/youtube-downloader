@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same mark as the app's Logo component (templates/index.html): a play
+     triangle + small download-tray stroke, in the same 24x24 viewBox,
+     scaled/centered into the 108x108 adaptive icon foreground canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="30"
+        android:translateY="30"
+        android:scaleX="2"
+        android:scaleY="2">
+        <path
+            android:fillColor="#16211F"
+            android:pathData="M8,5 L8,19 L19,12 Z" />
+        <path
+            android:strokeColor="#16211F"
+            android:strokeWidth="2.2"
+            android:strokeLineCap="round"
+            android:pathData="M3,18 L3,20 L9,20" />
+    </group>
+</vector>
