@@ -18,3 +18,8 @@ android/.kotlin/
 android/app/src/main/assets/index.html
 *.iml
 .idea/
+
+# Release signing — never commit a keystore or its passwords
+android/keystore.properties
+android/*.keystore
+android/*.jks
