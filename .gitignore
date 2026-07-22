@@ -1,5 +1,6 @@
 downloads/
 cookies.txt
+*cookies*.txt
 __pycache__/
 *.pyc
 *.pyo
